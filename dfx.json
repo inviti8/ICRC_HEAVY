@@ -12,24 +12,14 @@
           "gzip": true,
           "main": "src/Token.mo",
           "args": "--incremental-gc --release"
-        },
-        "allowlist": {
-          "type": "motoko",
-          "main": "src/examples/Allowlist.mo",
-          "args": "-v --incremental-gc"
-        },
-        "lotto": {
-          "type": "motoko",
-          "main": "src/examples/Lotto.mo",
-          "args": "-v --incremental-gc"
         }
     },
     "defaults": {
-        "build": {
-            "packtool": "mops sources",
-            "args": ""
-        },
-        "replica": {
+      "build": {
+        "args": "",
+        "packtool": "mops sources"
+      },
+      "replica": {
           "subnet_type": "system"
       }
     }

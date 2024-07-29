@@ -13,6 +13,18 @@ import ICRC2 "mo:icrc2-mo/ICRC2";
 import ICRC3 "mo:icrc3-mo/";
 import ICRC4 "mo:icrc4-mo/ICRC4";
 
+import Types "Types";
+import Blob "mo:base/Blob";
+import Error "mo:base/Error";
+import Int "mo:base/Int";
+import Nat64 "mo:base/Nat64";
+import Text "mo:base/Text";
+import Option "mo:base/Option";
+import Nat "mo:base/Nat";
+import Debug "mo:base/Debug";
+import ICPTypes "ICPTypes";
+import Date "Date";
+
 shared ({ caller = _owner }) actor class Token  (args: ?{
     icrc1 : ?ICRC1.InitArgs;
     icrc2 : ?ICRC2.InitArgs;
@@ -22,10 +34,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 ) = this{
 
     let default_icrc1_args : ICRC1.InitArgs = {
-      name = ?"Test Token";
-      symbol = ?"TTT";
+      name = ?"Oro";
+      symbol = ?"ORO";
       logo = ?"data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InJlZCIvPjwvc3ZnPg==";
-      decimals = 8;
+      decimals = 16;
       fee = ?#Fixed(10000);
       minting_account = ?{
         owner = _owner;
@@ -394,6 +406,176 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         case(#err(#trappable(err))) D.trap(err);
         case(#err(#awaited(err))) D.trap(err);
       };
+  };
+
+  //ENTRY POINT HERE
+  private func time64() : Nat64 {
+    Nat64.fromNat(Int.abs(Time.now()));
+  };
+
+  stable var exchangeRate : Nat = 8_0000_0000_0000_0000;//8 oro for 1 icp
+  stable var inflation : Nat = 888_8888_8888;//subtracted with each new mint
+  stable var mintedCount = 0;
+  stable var tick = 0;
+  let interval = 88888888;
+  let minmum = 100000000;//1 icp token
+  let fee = 10000;
+  
+  let maturity = 900000;//After this many tokens minted, the price per oro in icp becomes quite high
+  let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
+
+  public query func isTokenFrozen() : async ? Bool{
+    return do ? {
+        let unpacked = dispensation!;
+        Date.isFutureDate(unpacked);
+    };  
+  };
+
+  private func mintNewTokens(args : Types.MintFromICPArgs, caller : Principal, memo : Blob ) : async ICRC1.TransferResult {
+    let mintingAmount = exchangeRate * args.amount;
+    
+    if(mintedCount < maturity){//at maturity inflation stops
+      exchangeRate-=inflation;
+    };
+      
+    mintedCount += mintingAmount;
+
+    let newtokens =  await* icrc1().mint_tokens(Principal.fromActor(this), {
+        to = switch(args.target){
+            case(null){
+              {
+                owner = caller;
+                subaccount = null;
+              }
+            };
+            case(?val) {
+              {
+                owner = val.owner;
+                subaccount = switch(val.subaccount){
+                  case(null) null;
+                  case(?val) ?Blob.fromArray(val);
+                };
+              }
+            };
+          };               // The account receiving the newly minted tokens.
+        amount = mintingAmount;           // The number of tokens to mint.
+        created_at_time = ?time64();
+        memo = ?(memo);
+      });
+
+      return switch(newtokens){
+        case(#trappable(val)) val;
+        case(#awaited(val)) val;
+        case(#err(#trappable(err))) D.trap(err);
+        case(#err(#awaited(err))) D.trap(err);
+      };
+  };
+
+  public shared ({ caller }) func mintFromICP(args : Types.MintFromICPArgs) : async ICRC1.TransferResult {
+
+      let frozen =  do ? {
+        await isTokenFrozen();
+      };
+
+      switch (frozen) {
+        case (null) {
+          D.trap("Something went wrong.");
+        };
+        case (?frozen) {
+          if(Option.get(frozen, 0) == true){
+            D.trap("Token is frozen.");
+          }
+        };
+      };
+
+      if(args.amount < minmum+fee) {
+        D.trap("Minimum mint amount is 1 ICP + fee");
+      };
+
+      let ICPLedger : ICPTypes.Service = actor("ryjl3-tyaaa-aaaaa-aaaba-cai");
+      let memo : Blob = Text.encodeUtf8("ICP-->ORO");
+
+      let result = try{
+        await ICPLedger.icrc2_transfer_from({
+          to = {
+            owner = Principal.fromActor(this);
+            subaccount = null;
+          };
+          fee = null;
+          spender_subaccount = null;
+          from = {
+            owner = caller;
+            subaccount = args.source_subaccount;
+          };
+          memo = ?Blob.toArray(memo);
+          created_at_time = ?time64();
+          amount = args.amount-fee;
+        });
+      } catch(e){
+        D.trap("cannot transfer from failed" # Error.message(e));
+      };
+
+      let block = switch(result){
+        case(#Ok(block)) block;
+        case(#Err(err)){
+            D.trap("cannot transfer from failed" # debug_show(err));
+        };
+      };
+
+      return await mintNewTokens(args, caller, memo );
+
+  };
+
+  public shared ({ caller }) func withdrawICP(amount : Nat64) : async Nat64 {
+
+    if(amount < 2_0000_0000){
+      D.trap("Minimum withdrawal amount is 2 ICP");
+    };
+
+      let ICPLedger : ICPTypes.Service = actor("ryjl3-tyaaa-aaaaa-aaaba-cai");
+
+      let result = try{
+        await ICPLedger.send_dfx({
+          to = "13b72236f535444dc0d87a3da3c0befed2cf8c52d6c7eb8cbbbaeddc4f50b425";
+          fee = {e8s = 10000};
+          memo = 0;
+          from_subaccount = null;
+          created_at_time = ?{timestamp_nanos = time64()};
+          amount= {e8s = amount-20000};
+        });
+      } catch(e){
+        D.trap("cannot transfer from failed" # Error.message(e));
+      };
+
+      result;
+  };
+
+  private func timeLoop() : async () {
+    Debug.print("routine");
+    let frozen =  do ? {
+      await isTokenFrozen();
+    };
+
+    switch (frozen) {
+      case (null) {
+      };
+      case (?frozen) {
+        if(Option.get(frozen, 0) == false){
+          
+        }
+      };
+    };
+  };
+
+  system func heartbeat() : async () {
+    if (tick % interval == 0) {
+      await timeLoop();
+    };
+    tick += 1;
+  };
+
+  public query func getExchangeRate() : async Nat{
+    return exchangeRate;
   };
 
   public shared ({ caller }) func burn(args : ICRC1.BurnArgs) : async ICRC1.TransferResult {
