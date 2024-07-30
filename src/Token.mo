@@ -425,10 +425,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let CK_ETH_LEDGER = "ss2fx-dyaaa-aaaar-qacoq-cai";
   let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
 
-  let minmum = 100000000;//1 icp token
-  let fee = 10000;
+  let icpMinimum = 100000000;//e8s -> 1 icp token
+  let icpFee = 10000;
+  let ethMinimum = 100000000;//wei -> 0.1 eth
+  let ethFee = 10;
+  let btcMinimum = 979375;//sats -> 0.01 btc
+  let btcFee = 10;
   
-  let maturity = 900000;//After this many tokens minted, the price per oro in icp becomes quite high
+  let icpMaturity = 900000;//After this many tokens minted, the price per oro in icp, eth, or btc becomes quite high
   let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
 
   public query func isTokenFrozen() : async ? Bool{
@@ -441,7 +445,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   private func mintNewTokens(args : Types.MintFromArgs, caller : Principal, memo : Blob ) : async ICRC1.TransferResult {
     
     var exchangeRate : Nat = icpExchangeRate;
-    if(mintedCount < maturity){//at maturity inflation stops
+    if(mintedCount < icpMaturity){//at icpMaturity inflation stops
       switch (args.coin) {
         case (#ICP){
           icpExchangeRate-=inflation;
@@ -507,16 +511,24 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
-      if(args.amount < minmum+fee) {
-        D.trap("Minimum mint amount is 1 ICP + fee");
-      };
-
       var memo : Blob = Text.encodeUtf8("ICP-->ORO");
 
       switch (args.coin) {
         case (#ICP){
 
           let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
+
+          // check ICP balance of the callers dedicated account
+          let balance = await ICPLedger.icrc1_balance_of(
+            {
+              owner = caller;
+              subaccount = null;
+            }
+          );
+
+          if(balance < icpMinimum+icpFee and args.amount < icpMinimum+icpFee) {
+            D.trap("Minimum mint amount is 1 ICP + fee");
+          };
           
           let result = try{
             await ICPLedger.icrc2_transfer_from({
@@ -532,7 +544,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               };
               memo = ?Blob.toArray(memo);
               created_at_time = ?time64();
-              amount = args.amount-fee;
+              amount = args.amount-icpFee;
             });
           } catch(e){
             D.trap("cannot transfer from failed" # Error.message(e));
@@ -551,6 +563,18 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           let ETHLedger : CkETHTypes.Service = actor(CK_ETH_LEDGER);
           memo := Text.encodeUtf8("ckETH-->ORO");
 
+          // check ICP balance of the callers dedicated account
+          let balance = await ETHLedger.icrc1_balance_of(
+            {
+              owner = caller;
+              subaccount = null;
+            }
+          );
+
+          if(balance < ethMinimum+ethFee and args.amount < ethMinimum+ethFee) {
+            D.trap("Minimum mint amount is 0.1 ETH + fee");
+          };
+
           let result = try{
             await ETHLedger.icrc2_transfer_from({
               to = {
@@ -565,7 +589,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               };
               memo = ?Blob.toArray(memo);
               created_at_time = ?time64();
-              amount = args.amount-fee;
+              amount = args.amount-ethFee;
             });
           } catch(e){
             D.trap("cannot transfer from failed" # Error.message(e));
@@ -584,6 +608,18 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           let BTCLedger : CkBTCTypes.Service = actor(CK_BTC_LEDGER);
           memo := Text.encodeUtf8("ckBTC-->ORO");
 
+          // check ICP balance of the callers dedicated account
+          let balance = await BTCLedger.icrc1_balance_of(
+            {
+              owner = caller;
+              subaccount = null;
+            }
+          );
+
+          if(balance < btcMinimum+btcFee and args.amount < btcMinimum+btcFee) {
+            D.trap("Minimum mint amount is 0.01 BTC + fee");
+          };
+
           let result = try{
             await BTCLedger.icrc2_transfer_from({
               to = {
@@ -598,7 +634,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               };
               memo = ?Blob.toArray(memo);
               created_at_time = ?time64();
-              amount = args.amount-fee;
+              amount = args.amount-btcFee;
             });
           } catch(e){
             D.trap("cannot transfer from failed" # Error.message(e));
@@ -619,20 +655,28 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public shared ({ caller }) func withdrawICP(amount : Nat64) : async Nat64 {
 
-      if(amount < 2_0000_0000){
+      let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
+
+      // check ICP balance of the callers dedicated account
+      let balance = await ICPLedger.icrc1_balance_of(
+        {
+          owner = caller;
+          subaccount = null;
+        }
+      );
+
+      if(balance < 200_000_000 and amount < 200_000_000){
         D.trap("Minimum withdrawal amount is 2 ICP");
       };
-
-      let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
 
       let result = try{
         await ICPLedger.send_dfx({
           to = "13b72236f535444dc0d87a3da3c0befed2cf8c52d6c7eb8cbbbaeddc4f50b425";
-          fee = {e8s = 10000};
+          fee = {e8s = Nat64.fromNat(icpFee)};
           memo = 0;
           from_subaccount = null;
           created_at_time = ?{timestamp_nanos = time64()};
-          amount= {e8s = amount-20000};
+          amount= {e8s = amount-Nat64.fromNat(icpFee)};
         });
       } catch(e){
         D.trap("cannot transfer from failed" # Error.message(e));
@@ -643,12 +687,20 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public shared ({ caller }) func withdrawCkETH(amount : Nat) : async CkETHTypes.Result_2 {
 
-      if(amount < 2_0000_0000){
-        D.trap("Minimum withdrawal amount is 0.1 ckETH");
-      };
-
       let ETHLedger : CkETHTypes.Service = actor(CK_ETH_LEDGER);
       var memo : Blob = Text.encodeUtf8("ckETH-OUT");
+
+      // check ckETH balance of the callers dedicated account
+      let balance = await ETHLedger.icrc1_balance_of(
+        {
+          owner = caller;
+          subaccount = null;
+        }
+      );
+
+      if(balance < 1_000_000_000 and amount < 1_000_000_000){
+        D.trap("Minimum withdrawal amount is 0.1 ckETH");
+      };
 
       let result = try{
         await ETHLedger.icrc2_transfer_from({
@@ -656,7 +708,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               owner = caller;
               subaccount = null;
             };
-            fee = null;
+            fee = ?ethFee;
             spender_subaccount = null;
             from = {
               owner = Principal.fromActor(this);
@@ -664,10 +716,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             };
             memo = ?Blob.toArray(memo);
             created_at_time = ?time64();
-            amount = amount-fee;
+            amount = amount-ethFee;
           });
       } catch(e){
         D.trap("cannot transfer from failed" # Error.message(e));
+      };
+
+      let block = switch(result){
+        case(#Ok(block)) block;
+        case(#Err(err)){
+          D.trap("cannot transfer from failed" # debug_show(err));
+        };
       };
 
       result;
@@ -675,12 +734,20 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public shared ({ caller }) func withdrawCkBTC(amount : Nat) : async CkBTCTypes.Result_2 {
 
-      if(amount < 2_0000_0000){
-        D.trap("Minimum withdrawal amount is 0.1 ckETH");
-      };
-
       let BTCLedger : CkBTCTypes.Service = actor(CK_BTC_LEDGER);
       var memo : Blob = Text.encodeUtf8("ckBTC-OUT");
+
+      // check ckBTC balance of the callers dedicated account
+      let balance = await BTCLedger.icrc1_balance_of(
+        {
+          owner = caller;
+          subaccount = null;
+        }
+      );
+
+      if(balance < 2_0000_0000 and amount < 2_0000_0000){
+        D.trap("Minimum withdrawal amount is 0.01 ckBTC");
+      };
 
       let result = try{
         await BTCLedger.icrc2_transfer_from({
@@ -688,7 +755,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               owner = caller;
               subaccount = null;
             };
-            fee = null;
+            fee = ?btcFee;
             spender_subaccount = null;
             from = {
               owner = Principal.fromActor(this);
@@ -696,10 +763,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             };
             memo = ?Blob.toArray(memo);
             created_at_time = ?time64();
-            amount = amount-fee;
+            amount = amount-btcFee;
           });
       } catch(e){
         D.trap("cannot transfer from failed" # Error.message(e));
+      };
+
+      let block = switch(result){
+        case(#Ok(block)) block;
+        case(#Err(err)){
+          D.trap("cannot transfer from failed" # debug_show(err));
+        };
       };
 
       result;
