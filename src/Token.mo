@@ -22,6 +22,10 @@ import Text "mo:base/Text";
 import Option "mo:base/Option";
 import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
+import Array "mo:base/Array";
+import Nat8 "mo:base/Nat8";
+import List "mo:base/List";
+import Map "mo:stable-hash-map/Map/Map";
 import ICPTypes "ICPTypes";
 import CkETHTypes "CkETHTypes";
 import CkBTCTypes "CkBTCTypes";
@@ -410,20 +414,28 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
   };
 
-  //ENTRY POINT HERE
+  //ORO SPECIFIC CODE
   private func time64() : Nat64 {
     Nat64.fromNat(Int.abs(Time.now()));
   };
 
   stable var icpExchangeRate : Nat = 8_0000_0000_0000_0000;//8 oro for 1 ICP
-  stable var inflation : Nat = 888_8888_8888;//subtracted with each new mint
+  stable var icpInflation : Nat = 888_8888_8888;//subtracted with each new mint
   stable var ckEthExchangeRate : Nat = icpExchangeRate*8;//64 oro for 1 ckETH
+  stable var ckEthInflation : Nat = icpInflation*8;//subtracted with each new mint
   stable var ckBtcExchangeRate : Nat = icpExchangeRate*80;//640 oro for 1 ckBTC
+  stable var ckBtcInflation : Nat = icpInflation*80;//subtracted with each new mint
   stable var mintedCount = 0;
 
+  stable var tick = 0;
+  let interval = 88888888;
+
+
   let ICP_LEDGER = "ryjl3-tyaaa-aaaaa-aaaba-cai";
-  let CK_ETH_LEDGER = "ss2fx-dyaaa-aaaar-qacoq-cai";
-  let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
+  //let CK_ETH_LEDGER = "ss2fx-dyaaa-aaaar-qacoq-cai";
+  let CK_ETH_LEDGER = "sh5u2-cqaaa-aaaar-qacna-cai";//testnet
+  //let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
+  let CK_BTC_LEDGER = "mc6ru-gyaaa-aaaar-qaaaq-cai";//testnet
 
   let icpMinimum = 100000000;//e8s -> 1 icp token
   let icpFee = 10000;
@@ -432,31 +444,115 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let btcMinimum = 979375;//sats -> 0.01 btc
   let btcFee = 10;
   
-  let icpMaturity = 900000;//After this many tokens minted, the price per oro in icp, eth, or btc becomes quite high
+  let maturity = 900000;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
   let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
+  stable var ephemeralMintCount = 0;
+
+  let { nhash; phash } = Map;
+  let generators = Map.new<Nat, Text>(nhash);
+  let generator_principals = Map.new<Principal, Nat>(phash);
+  let generator_accounts = Map.new<Nat, ?[Nat8]>(nhash);
+
+  private func ephemeralMint() : async ?Types.MintEphemeral {
+
+    return switch(Map.get<Nat, Text>(generators, nhash, ephemeralMintCount)){//if generator exists, tokens are minted to them
+        case(null){
+          D.trap("Cannot Perform Ephemeral Mint.");
+        };
+        case(?gen){
+
+          ?{
+            target = switch(Map.get<Nat, ?[Nat8]>(generator_accounts, nhash, ephemeralMintCount)){
+              case(null){
+                ?{
+                  owner = Principal.fromText(gen);
+                  subaccount = null;
+                }
+              };
+              case(?val) {
+                ?{
+                  owner = Principal.fromText(gen);
+                  subaccount = switch(val){
+                    case(null) null;
+                    case(?val) ?val;
+                  };
+                }
+              };
+            };
+            amount = 8;
+          };
+        };
+      };
+  };
+
+  system func heartbeat() : async () {
+    if (tick % interval == 0) {
+      if(mintedCount >= maturity){//at maturity ephemeral mint starts
+        let args :  ?Types.MintEphemeral = await ephemeralMint();
+        switch(args){
+          case(null){
+            D.trap("Cannot Perform Ephemeral Mint.");
+          };
+          case(?val){
+            var memo : Blob = Text.encodeUtf8("EPHEMERAL-->ORO");
+            let mint = mintEphemeralTokens(val, memo);
+          };
+        };
+      };
+    };
+  };
 
   public query func isTokenFrozen() : async ? Bool{
     return do ? {
         let unpacked = dispensation!;
         Date.isFutureDate(unpacked);
-    };  
+    };
   };
 
-  private func mintNewTokens(args : Types.MintFromArgs, caller : Principal, memo : Blob ) : async ICRC1.TransferResult {
+  private func mintEphemeralTokens(args : Types.MintEphemeral, memo : Blob ) : async ICRC1.TransferResult {
+    let newtokens =  await* icrc1().mint_tokens(Principal.fromActor(this), {
+        to = switch(args.target){
+            case(null){
+              D.trap("Mint target not found.");
+            };
+            case(?val) {
+              {
+                owner = val.owner;
+                subaccount = switch(val.subaccount){
+                  case(null) null;
+                  case(?val) ?Blob.fromArray(val);
+                };
+              }
+            };
+          };               // The account receiving the newly minted tokens.
+        amount = args.amount;           // The number of tokens to mint.
+        created_at_time = ?time64();
+        memo = ?(memo);
+      });
+
+      return switch(newtokens){
+        case(#trappable(val)) val;
+        case(#awaited(val)) val;
+        case(#err(#trappable(err))) D.trap(err);
+        case(#err(#awaited(err))) D.trap(err);
+      };
+  };
+
+  private func mintNewTokensWithInflation(args : Types.MintFromArgs, caller : Principal, memo : Blob ) : async ICRC1.TransferResult {
     
     var exchangeRate : Nat = icpExchangeRate;
-    if(mintedCount < icpMaturity){//at icpMaturity inflation stops
+    if(mintedCount < maturity){//at maturity icpInflation stops
       switch (args.coin) {
         case (#ICP){
-          icpExchangeRate-=inflation;
+          icpExchangeRate-=icpInflation;
         };
         case (#ETH){
           exchangeRate := ckEthExchangeRate;
-          ckEthExchangeRate-=inflation;
+          ckEthExchangeRate-=ckEthInflation;
         };
         case (#BTC){
           exchangeRate := ckBtcExchangeRate;
-          ckBtcExchangeRate-=inflation;
+          ckBtcExchangeRate-=ckBtcInflation;
         };
       };
     };
@@ -489,7 +585,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       return switch(newtokens){
         case(#trappable(val)) val;
-        case(#awaited(val)) val;
+        case(#awaited(val)) {
+          Map.set(generators, nhash, mintedCount, Principal.toText(caller));//Add minter to reconstruct
+          Map.set(generator_principals, phash, caller, mintedCount);//Add minter to list for ephemeral minting
+          Map.set(generator_accounts, nhash, mintedCount, args.source_subaccount);//Add minter to list for ephemeral minting
+          val;
+          };
         case(#err(#trappable(err))) D.trap(err);
         case(#err(#awaited(err))) D.trap(err);
       };
@@ -511,6 +612,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
+      let generator = do ? {
+        Map.get(generator_principals, phash, caller);
+      };
+
+      if(generator != null){//if caller has not minted already, they can mint once
+        D.trap("only one mint per Pricipal is allowed.");
+      };
+
       var memo : Blob = Text.encodeUtf8("ICP-->ORO");
 
       switch (args.coin) {
@@ -522,7 +631,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           let balance = await ICPLedger.icrc1_balance_of(
             {
               owner = caller;
-              subaccount = null;
+              subaccount = args.source_subaccount;
             }
           );
 
@@ -567,7 +676,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           let balance = await ETHLedger.icrc1_balance_of(
             {
               owner = caller;
-              subaccount = null;
+              subaccount = args.source_subaccount;
             }
           );
 
@@ -612,7 +721,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           let balance = await BTCLedger.icrc1_balance_of(
             {
               owner = caller;
-              subaccount = null;
+              subaccount = args.source_subaccount;
             }
           );
 
@@ -650,7 +759,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
-      return await mintNewTokens(args, caller, memo);
+      return await mintNewTokensWithInflation(args, caller, memo);
   };
 
   public shared ({ caller }) func withdrawICP(amount : Nat64) : async Nat64 {
@@ -777,6 +886,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
 
       result;
+  };
+
+  public query  ({ caller }) func getGeneratorEpoch() : async ?Nat{
+    return Map.get(generator_principals, phash, caller);
   };
 
   public query func getIcpExchangeRate() : async Nat{

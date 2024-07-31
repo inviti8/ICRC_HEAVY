@@ -9,19 +9,8 @@ module {
     target: ?{ owner : Principal; subaccount : ?[Nat8] };
     amount : Nat;
   };
-  public type MintFromICPArgs = {
-    source_subaccount: ?[Nat8];
-    target: ?ICPTypes.Account;
-    amount : Nat;
-  };
-  public type MintFromCkETHArgs = {
-    source_subaccount: ?[Nat8];
-    target: ?CkETHTypes.Account;
-    amount : Nat;
-  };
-  public type MintFromCkBTCArgs = {
-    source_subaccount: ?[Nat8];
-    target: ?CkBTCTypes.Account;
+  public type MintEphemeral = {
+    target: ?{ owner : Principal; subaccount : ?[Nat8] };
     amount : Nat;
   };
 }
