@@ -1,7 +1,3 @@
-import ICPTypes "ICPTypes";
-import CkETHTypes "CkETHTypes";
-import CkBTCTypes "CkBTCTypes";
-
 module {
   public type MintFromArgs = {
     coin: {#ICP; #ETH; #BTC;};

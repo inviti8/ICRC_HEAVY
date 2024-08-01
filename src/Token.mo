@@ -4,8 +4,6 @@ import ExperimentalCycles "mo:base/ExperimentalCycles";
 
 import Principal "mo:base/Principal";
 import Time "mo:base/Time";
-
-import CertifiedData "mo:base/CertifiedData";
 import CertTree "mo:cert/CertTree";
 
 import ICRC1 "mo:icrc1-mo/ICRC1";
@@ -21,10 +19,7 @@ import Nat64 "mo:base/Nat64";
 import Text "mo:base/Text";
 import Option "mo:base/Option";
 import Nat "mo:base/Nat";
-import Debug "mo:base/Debug";
-import Array "mo:base/Array";
 import Nat8 "mo:base/Nat8";
-import List "mo:base/List";
 import Map "mo:stable-hash-map/Map/Map";
 import ICPTypes "ICPTypes";
 import CkETHTypes "CkETHTypes";
@@ -538,7 +533,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
   };
 
-  private func mintNewTokensWithInflation(args : Types.MintFromArgs, caller : Principal, memo : Blob ) : async ICRC1.TransferResult {
+  private func mintInflationaryTokens(args : Types.MintFromArgs, caller : Principal, memo : Blob ) : async ICRC1.TransferResult {
     
     var exchangeRate : Nat = icpExchangeRate;
     if(mintedCount < maturity){//at maturity icpInflation stops
@@ -597,27 +592,23 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   public shared ({ caller }) func mintFromToken(args : Types.MintFromArgs) : async ICRC1.TransferResult {
-      let frozen =  do ? {
-        await isTokenFrozen();
-      };
 
-      switch (frozen) {
+      switch (await isTokenFrozen()) {
         case (null) {
           D.trap("Something went wrong.");
         };
-        case (?frozen) {
-          if(Option.get(frozen, 0) == true){
+        case (?val) {
+          if(val == true){
             D.trap("Token is frozen.");
           }
         };
       };
 
-      let generator = do ? {
-        Map.get(generator_principals, phash, caller);
-      };
-
-      if(generator != null){//if caller has not minted already, they can mint once
-        D.trap("only one mint per Pricipal is allowed.");
+      switch (Map.get(generator_principals, phash, caller)) {
+        case (null) {};
+        case (?val) {
+          D.trap("Only one mint per Pricipal is allowed.");
+        };
       };
 
       var memo : Blob = Text.encodeUtf8("ICP-->ORO");
@@ -759,7 +750,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
-      return await mintNewTokensWithInflation(args, caller, memo);
+      return await mintInflationaryTokens(args, caller, memo);
   };
 
   public shared ({ caller }) func withdrawICP(amount : Nat64) : async Nat64 {
@@ -769,7 +760,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       // check ICP balance of the callers dedicated account
       let balance = await ICPLedger.icrc1_balance_of(
         {
-          owner = caller;
+          owner = Principal.fromActor(this);
           subaccount = null;
         }
       );
@@ -802,7 +793,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       // check ckETH balance of the callers dedicated account
       let balance = await ETHLedger.icrc1_balance_of(
         {
-          owner = caller;
+          owner = Principal.fromActor(this);
           subaccount = null;
         }
       );
@@ -849,7 +840,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       // check ckBTC balance of the callers dedicated account
       let balance = await BTCLedger.icrc1_balance_of(
         {
-          owner = caller;
+          owner = Principal.fromActor(this);
           subaccount = null;
         }
       );
