@@ -432,12 +432,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   //let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
   let CK_BTC_LEDGER = "mc6ru-gyaaa-aaaar-qaaaq-cai";//testnet
 
-  let icpMinimum = 100000000;//e8s -> 1 icp token
-  let icpFee = 10000;
-  let ethMinimum = 100000000;//wei -> 0.1 eth
-  let ethFee = 10;
-  let btcMinimum = 979375;//sats -> 0.01 btc
-  let btcFee = 10;
+  let icpMinimum : Nat = 100000000;//e8s -> 1 icp token
+  let icpFee : Nat = 10000;
+  let ethMinimum : Nat = 100000000;//wei -> 0.1 eth
+  let ethFee : Nat = 10;
+  let btcMinimum : Nat = 979375;//sats -> 0.01 btc
+  let btcFee : Nat = 10;
   
   let maturity = 900000;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
   let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
@@ -539,7 +539,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     if(mintedCount < maturity){//at maturity icpInflation stops
       switch (args.coin) {
         case (#ICP){
-          icpExchangeRate-=icpInflation;
+          exchangeRate-=icpInflation;
         };
         case (#ETH){
           exchangeRate := ckEthExchangeRate;
@@ -604,7 +604,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
-      switch (Map.get(generator_principals, phash, caller)) {
+      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
         case (null) {};
         case (?val) {
           D.trap("Only one mint per Pricipal is allowed.");
