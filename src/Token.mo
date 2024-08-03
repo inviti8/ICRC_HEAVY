@@ -20,6 +20,7 @@ import Text "mo:base/Text";
 import Option "mo:base/Option";
 import Nat "mo:base/Nat";
 import Nat8 "mo:base/Nat8";
+import Array "mo:base/Array";
 import Map "mo:stable-hash-map/Map/Map";
 import ICPTypes "ICPTypes";
 import CkETHTypes "CkETHTypes";
@@ -448,6 +449,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_principals = Map.new<Principal, Nat>(phash);
   let generator_accounts = Map.new<Nat, ?[Nat8]>(nhash);
 
+  let gens : [var Text] = Array.init<Text>(maturity, "");
+
   private func ephemeralMint() : async ?Types.MintEphemeral {
 
     return switch(Map.get<Nat, Text>(generators, nhash, ephemeralMintCount)){//if generator exists, tokens are minted to them
@@ -540,6 +543,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       switch (args.coin) {
         case (#ICP){
           exchangeRate-=icpInflation;
+          icpExchangeRate-=icpInflation;
         };
         case (#ETH){
           exchangeRate := ckEthExchangeRate;
@@ -581,6 +585,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       return switch(newtokens){
         case(#trappable(val)) val;
         case(#awaited(val)) {
+          gens[mintedCount] := Principal.toText(caller);
           Map.set(generators, nhash, mintedCount, Principal.toText(caller));//Add minter to reconstruct
           Map.set(generator_principals, phash, caller, mintedCount);//Add minter to list for ephemeral minting
           Map.set(generator_accounts, nhash, mintedCount, args.source_subaccount);//Add minter to list for ephemeral minting
@@ -604,7 +609,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
-      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
+      //Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })
+      //let freeze = Array.freeze<Text>(gens);
+      switch (Array.find<Text>(Array.freeze<Text>(gens), func x = x==Principal.toText(caller))) {
         case (null) {};
         case (?val) {
           D.trap("Only one mint per Pricipal is allowed.");
