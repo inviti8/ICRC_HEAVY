@@ -756,7 +756,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       let block = switch(result){
         case(#Ok(block)){
-          gens[mintedCount] := Principal.toText(caller);
+          gens[mintedCount-1] := Principal.toText(caller);
           Map.set(generators, nhash, mintedCount, Principal.toText(caller));//Add minter to reconstruct
           Map.set(generator_principals, phash, caller, mintedCount);//Add minter to list for ephemeral minting
           Map.set(generator_accounts, nhash, mintedCount, args.source_subaccount);//Add minter to list for ephemeral minting
