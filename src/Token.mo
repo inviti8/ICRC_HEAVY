@@ -605,7 +605,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       //Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })
       //let freeze = Array.freeze<Text>(gens);
-      switch (Array.find<Text>(Array.freeze<Text>(gens), func x = x==Principal.toText(caller))) {
+      //Array.find<Text>(Array.freeze<Text>(gens), func x = x==Principal.toText(caller))
+      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
         case (null) {};
         case (?val) {
           D.trap("Only one mint per Pricipal is allowed.");
@@ -756,7 +757,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       let block = switch(result){
         case(#Ok(block)){
-          gens[mintedCount-1] := Principal.toText(caller);
+          //gens[mintedCount-1] := Principal.toText(caller);
           Map.set(generators, nhash, mintedCount, Principal.toText(caller));//Add minter to reconstruct
           Map.set(generator_principals, phash, caller, mintedCount);//Add minter to list for ephemeral minting
           Map.set(generator_accounts, nhash, mintedCount, args.source_subaccount);//Add minter to list for ephemeral minting
