@@ -609,7 +609,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
         case (null) {};
         case (?val) {
-          D.trap("Only one mint per Pricipal is allowed.");
+          D.trap("Only one mint per Principal is allowed.");
         };
       };
 
