@@ -14,5 +14,8 @@ do
     dfx identity use $user$i
     principal=$(dfx identity get-principal)
     account_id=$(icx principal-convert --to-hex $principal)
-    dfx ledger transfer $account_id --amount 1000 --memo 1
+    echo $account_id 
+    dfx identity use ident-1
+    echo "dfx ledger transfer ${account_id} --amount 1000 --memo ${i}"
+    dfx ledger transfer $account_id --amount 1000 --memo $i
 done
