@@ -584,13 +584,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       return switch(newtokens){
         case(#trappable(val)) val;
-        case(#awaited(val)) {
-          gens[mintedCount] := Principal.toText(caller);
-          Map.set(generators, nhash, mintedCount, Principal.toText(caller));//Add minter to reconstruct
-          Map.set(generator_principals, phash, caller, mintedCount);//Add minter to list for ephemeral minting
-          Map.set(generator_accounts, nhash, mintedCount, args.source_subaccount);//Add minter to list for ephemeral minting
-          val;
-          };
+        case(#awaited(val)) val;
         case(#err(#trappable(err))) D.trap(err);
         case(#err(#awaited(err))) D.trap(err);
       };
@@ -757,7 +751,23 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
-      return await mintInflationaryTokens(args, caller, memo);
+      //mintInflationaryTokens(args, caller, memo)
+      var result : ICRC1.TransferResult = await mintInflationaryTokens(args, caller, memo);
+
+      let block = switch(result){
+        case(#Ok(block)){
+          gens[mintedCount] := Principal.toText(caller);
+          Map.set(generators, nhash, mintedCount, Principal.toText(caller));//Add minter to reconstruct
+          Map.set(generator_principals, phash, caller, mintedCount);//Add minter to list for ephemeral minting
+          Map.set(generator_accounts, nhash, mintedCount, args.source_subaccount);//Add minter to list for ephemeral minting
+          block;
+        };
+        case(#Err(err)){
+          D.trap("cannot transfer from failed" # debug_show(err));
+        };
+      };
+
+      return result;
   };
 
   public shared ({ caller }) func withdrawICP(amount : Nat64) : async Nat64 {
