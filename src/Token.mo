@@ -416,7 +416,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   stable var icpExchangeRate : Nat = 8_0000_0000_0000_0000;//8 oro for 1 ICP
-  stable var icpInflation : Nat = 888_8888_8888;//subtracted with each new mint
+  //stable var icpInflation : Nat = 888_8888_8888;//subtracted with each new mint
+  stable var icpInflation : Nat = 8888_8888_8888;//TEST
   stable var ckEthExchangeRate : Nat = icpExchangeRate*8;//64 oro for 1 ckETH
   stable var ckEthInflation : Nat = icpInflation*8;//subtracted with each new mint
   stable var ckBtcExchangeRate : Nat = icpExchangeRate*80;//640 oro for 1 ckBTC
@@ -440,7 +441,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let btcMinimum : Nat = 979375;//sats -> 0.01 btc
   let btcFee : Nat = 10;
   
-  let maturity = 900000;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
+  //let maturity = 900000;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
+  let maturity = 90000;//TEST
   let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
   stable var ephemeralMintCount = 0;
 
