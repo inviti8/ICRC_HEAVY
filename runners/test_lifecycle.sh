@@ -24,7 +24,7 @@ do
     record {
         amount = 200_010_000;
         spender = record {
-        owner = principal "'${1}'";
+        owner = principal "'${TOKEN}'";
         };
     }
     '
