@@ -20,7 +20,7 @@ do
     echo "dfx ledger transfer ${account_id} --amount 1000 --memo ${i}"
     dfx ledger transfer $account_id --amount 1000 --memo $i
     dfx identity use $u
-    dfx canister call token icrc2_approve '
+    dfx canister call nns-ledger icrc2_approve '
     record {
         amount = 200_010_000;
         spender = record {
@@ -28,7 +28,7 @@ do
         };
     }
     '
-    dfx canister call icrc1_ledger_canister icrc2_allowance "
+    dfx canister call nns-ledger icrc2_allowance "
     record { 
         account = record{owner = principal \"${u}\";}; 
         spender = record{owner = principal \"${TOKEN}\";} 
