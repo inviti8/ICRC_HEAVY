@@ -30,7 +30,7 @@ do
     '
     dfx canister call nns-ledger icrc2_allowance "
     record { 
-        account = record{owner = principal \"${u}\";}; 
+        account = record{owner = principal \"${dfx identity get-principal}\";}; 
         spender = record{owner = principal \"${TOKEN}\";} 
     }
     "
