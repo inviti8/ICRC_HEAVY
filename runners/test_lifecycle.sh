@@ -12,9 +12,10 @@ user='user'
 for i in `seq 2 $max`
 do
     u=$user$i
+    p=$(dfx identity get-principal)
     dfx identity new $u --storage-mode=plaintext || true
     dfx identity use $u
-    account_id=$(dfx ledger account-id --of-principal $(dfx identity get-principal))
+    account_id=$(dfx ledger account-id --of-principal $p)
     echo $account_id 
     dfx identity use ident-1
     echo "dfx ledger transfer ${account_id} --amount 1000 --memo ${i}"
@@ -28,16 +29,16 @@ do
         };
     }
     '
-    dfx canister call nns-ledger icrc2_allowance "
+    dfx canister call nns-ledger icrc2_allowance '
     record { 
-        account = record{owner = principal \"${dfx identity get-principal}\";}; 
-        spender = record{owner = principal \"${TOKEN}\";} 
+        account = record{owner = principal "'${p}'";}; 
+        spender = record{owner = principal "'${TOKEN}'";} 
     }
     "
     dfx canister call token mintFromToken '
     record {
         coin = variant { ICP };
-        source_subaccount + null;
+        source_subaccount = null;
         target = null;
         amount = 200_000_000;
     }
