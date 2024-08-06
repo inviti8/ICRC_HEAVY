@@ -500,7 +500,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       Debug.print("maturity = " # debug_show(maturity));
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         Debug.print("should do ephemeral mint!");
-        ignore await mintEphemeralTokens();
+        ignore mintEphemeralTokens();
       };
     };
     ignore inc();
@@ -513,20 +513,24 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
-  private func mintEphemeralTokens() : async ICRC1.TransferResult {
+  private func mintEphemeralTokens() : async () {
     let args :  ?Types.MintEphemeral = await ephemeralMint();
     var memo : Blob = Text.encodeUtf8("EPHEMERAL-->ORO");
+    Debug.print("EPHEMERAL MINT!");
     switch(args){
       case(null){
+        Debug.print("Something went wrong with ephemeral mint args!");
         D.trap("Something went wrong with ephemeral mint args.");
       };
       case(?arg){
         let newtokens =  await* icrc1().mint_tokens(Principal.fromActor(this), {
           to = switch(arg.target){
               case(null){
+                Debug.print("Mint target not found!");
                 D.trap("Mint target not found.");
               };
               case(?val) {
+                Debug.print("Mint Success!");
                 {
                   owner = val.owner;
                   subaccount = switch(val.subaccount){
@@ -540,18 +544,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           created_at_time = ?time64();
           memo = ?(memo);
         });
-        return switch(newtokens){
-          case(#trappable(val)) {
-            Debug.print("Ephemeral mint failed!");
-            val;
-            };
-          case(#awaited(val)) {
-            Debug.print("Ephemeral mint success!");
-            val;
-            };
-          case(#err(#trappable(err))) D.trap(err);
-          case(#err(#awaited(err))) D.trap(err);
-        };
       };
     };
 
