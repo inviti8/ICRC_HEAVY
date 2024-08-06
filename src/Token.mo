@@ -471,7 +471,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                 ?{
                   owner = Principal.fromText(gen);
                   subaccount = null;
-                }
+                };
               };
               case(?val) {
                 ?{
@@ -485,8 +485,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             };
             amount = 8;
           };
+          
         };
       };
+
   };
 
   public shared func inc() : async () {
@@ -501,6 +503,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         Debug.print("should do ephemeral mint!");
         ignore mintEphemeralTokens();
+        ephemeralMintCount := ephemeralMintCount + 1;
+        if(ephemeralMintCount==maturity){
+          ephemeralMintCount:=0;
+        }
       };
     };
     ignore inc();
@@ -570,7 +576,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
     
     var mintingAmount : Nat = icpExchangeRate * args.amount;
-    mintedCount += 1;
+    mintedCount := mintedCount + 1;
 
     let newtokens =  await* icrc1().mint_tokens(Principal.fromActor(this), {
         to = switch(args.target){
