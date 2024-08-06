@@ -499,9 +499,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       Debug.print("mintedCount = " # debug_show(mintedCount));
       Debug.print("maturity = " # debug_show(maturity));
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
+        Debug.print("should do ephemeral mint!");
         let args :  ?Types.MintEphemeral = await ephemeralMint();
         switch(args){
           case(null){
+            Debug.print("Args failed!");
             D.trap("Cannot Perform Ephemeral Mint.");
           };
           case(?val){
@@ -519,8 +521,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             };
           };
         };
+        tick:=0;
       };
-      tick:=0;
     };
     ignore inc();
   };
