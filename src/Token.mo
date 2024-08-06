@@ -508,17 +508,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           };
           case(?val){
             var memo : Blob = Text.encodeUtf8("EPHEMERAL-->ORO");
-            let mint = await mintEphemeralTokens(val, memo);
-            let block = switch(mint){
-              case(#Ok(block)){
-                Debug.print("Ephemeral mint success!");
-                block;
-              };
-              case(#Err(err)){
-                Debug.print("Ephemeral mint failed!");
-                D.trap("Ephemeral mint from failed" # debug_show(err));
-              };
-            };
+            let mint = ignore await mintEphemeralTokens(val, memo);
+            // let block = switch(mint){
+            //   case(#Ok(block)){
+            //     Debug.print("Ephemeral mint success!");
+            //     block;
+            //   };
+            //   case(#Err(err)){
+            //     Debug.print("Ephemeral mint failed!");
+            //     D.trap("Ephemeral mint from failed" # debug_show(err));
+            //   };
+            // };
           };
         };
         tick:=0;
@@ -556,8 +556,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       });
 
       return switch(newtokens){
-        case(#trappable(val)) val;
-        case(#awaited(val)) val;
+        case(#trappable(val)) {
+          Debug.print("Ephemeral mint failed!");
+          val;
+          };
+        case(#awaited(val)) {
+          Debug.print("Ephemeral mint success!");
+          val;
+          };
         case(#err(#trappable(err))) D.trap(err);
         case(#err(#awaited(err))) D.trap(err);
       };
