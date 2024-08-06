@@ -425,7 +425,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var ckBtcInflation : Nat = icpInflation*80;//subtracted with each new mint
   stable var mintedCount : Nat = 0;
 
-  stable var tick = 0;
+  var tick = 0;
+  var count = 0;
   //let interval = 88888888;
   let interval = 8888;//TEST
 
@@ -488,6 +489,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
   };
 
+  public shared func inc() : async () {
+    count := count + 1;
+    Debug.print("count = " # debug_show(count));
+  };
+
   system func heartbeat() : async () {
     if (tick % interval == 0) {
       Debug.print("tick");
@@ -515,6 +521,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
       tick:=0;
     };
+    ignore inc();
     tick+=1;
   };
 
