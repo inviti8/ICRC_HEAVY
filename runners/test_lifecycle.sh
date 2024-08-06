@@ -34,7 +34,7 @@ do
         account = record{owner = principal "'${p}'";}; 
         spender = record{owner = principal "'${TOKEN}'";} 
     }
-    "
+    '
     dfx canister call token mintFromToken '
     record {
         coin = variant { ICP };
