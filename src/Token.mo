@@ -491,11 +491,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public shared func inc() : async () {
     tick := tick + 1;
-    Debug.print("count = " # debug_show(count));
+    //Debug.print("count = " # debug_show(tick));
   };
 
   system func heartbeat() : async () {
     if (tick % interval == 0) {
+      Debug.print("Interval reached");
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         let args :  ?Types.MintEphemeral = await ephemeralMint();
         switch(args){
