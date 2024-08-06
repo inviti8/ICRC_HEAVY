@@ -444,8 +444,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let btcMinimum : Nat = 979375;//sats -> 0.01 btc
   let btcFee : Nat = 10;
   
-  //let maturity = 900000;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
-  let maturity = 90;//TEST
+  //let maturity = 899999;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
+  let maturity = 89;//TEST
   //let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
   let dispensation = Date.create(#Year 2023, #August, #Day 8);//TEST
   stable var ephemeralMintCount : Nat = 0;
