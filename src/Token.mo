@@ -428,7 +428,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   var tick = 0;
   var count = 0;
   //let interval = 88888888;
-  let interval = 8888;//TEST
+  let interval = 8;//TEST
 
 
   let ICP_LEDGER = "ryjl3-tyaaa-aaaaa-aaaba-cai";
@@ -490,13 +490,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   public shared func inc() : async () {
-    count := count + 1;
+    tick := tick + 1;
     Debug.print("count = " # debug_show(count));
   };
 
   system func heartbeat() : async () {
     if (tick % interval == 0) {
-      Debug.print("tick");
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         let args :  ?Types.MintEphemeral = await ephemeralMint();
         switch(args){
@@ -522,7 +521,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       tick:=0;
     };
     ignore inc();
-    tick+=1;
   };
 
   public query func isTokenFrozen() : async ? Bool{
