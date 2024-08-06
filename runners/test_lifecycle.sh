@@ -6,7 +6,7 @@ dfx identity use ident-1
 ADMIN_PRINCIPAL=$(dfx identity get-principal)
 TOKEN=$(dfx canister id token)
 
-max=9000
+max=89
 user='user'
 
 for i in `seq 2 $max`
