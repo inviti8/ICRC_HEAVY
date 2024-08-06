@@ -428,7 +428,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   var tick = 0;
   var count = 0;
   //let interval = 88888888;
-  let interval = 888;//TEST
+  let interval = 88;//TEST
 
 
   let ICP_LEDGER = "ryjl3-tyaaa-aaaaa-aaaba-cai";
