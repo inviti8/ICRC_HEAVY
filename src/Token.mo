@@ -483,7 +483,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                 }
               };
             };
-            amount = 8;
+            amount = 800_010_000;
           };
           
         };
@@ -503,7 +503,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         Debug.print("should do ephemeral mint!");
         ignore mintEphemeralTokens();
-        ephemeralMintCount := ephemeralMintCount + 1;
         if(ephemeralMintCount==maturity){
           ephemeralMintCount:=0;
         }
@@ -537,6 +536,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               };
               case(?val) {
                 Debug.print("Mint Success!");
+                ephemeralMintCount := ephemeralMintCount + 1;
                 {
                   owner = val.owner;
                   subaccount = switch(val.subaccount){
