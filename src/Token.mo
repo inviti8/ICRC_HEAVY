@@ -501,6 +501,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         Debug.print("should do ephemeral mint!");
         let args :  ?Types.MintEphemeral = await ephemeralMint();
+        Debug.print("args = " # debug_show(args));
         switch(args){
           case(null){
             Debug.print("Args failed!");
@@ -508,7 +509,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           };
           case(?val){
             var memo : Blob = Text.encodeUtf8("EPHEMERAL-->ORO");
-            let mint = ignore await mintEphemeralTokens(val, memo);
+            ignore await mintEphemeralTokens(val, memo);
             // let block = switch(mint){
             //   case(#Ok(block)){
             //     Debug.print("Ephemeral mint success!");
@@ -521,7 +522,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             // };
           };
         };
-        tick:=0;
+        //tick:=0;
       };
     };
     ignore inc();
