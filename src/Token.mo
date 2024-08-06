@@ -428,7 +428,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   var tick = 0;
   var count = 0;
   //let interval = 88888888;
-  let interval = 8;//TEST
+  let interval = 888;//TEST
 
 
   let ICP_LEDGER = "ryjl3-tyaaa-aaaaa-aaaba-cai";
@@ -496,7 +496,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   system func heartbeat() : async () {
     if (tick % interval == 0) {
-      Debug.print("Interval reached");
+      Debug.print("mintedCount = " # debug_show(mintedCount));
+      Debug.print("maturity = " # debug_show(maturity));
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         let args :  ?Types.MintEphemeral = await ephemeralMint();
         switch(args){
@@ -581,7 +582,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
     
     var mintingAmount : Nat = icpExchangeRate * args.amount;
-    mintedCount += mintingAmount;
+    mintedCount += 1;
 
     let newtokens =  await* icrc1().mint_tokens(Principal.fromActor(this), {
         to = switch(args.target){
