@@ -417,7 +417,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   stable var icpExchangeRate : Nat = 8_0000_0000_0000_0000;//8 oro for 1 ICP
   //stable var icpInflation : Nat = 888_8888_8888;//subtracted with each new mint
-  stable var icpInflation : Nat = 8888_8888_8888;//TEST
+  stable var icpInflation : Nat = 8_8888_8888_8888;//TEST
   stable var ckEthExchangeRate : Nat = icpExchangeRate*8;//64 oro for 1 ckETH
   stable var ckEthInflation : Nat = icpInflation*8;//subtracted with each new mint
   stable var ckBtcExchangeRate : Nat = icpExchangeRate*80;//640 oro for 1 ckBTC

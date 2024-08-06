@@ -6,7 +6,7 @@ dfx identity use ident-1
 ADMIN_PRINCIPAL=$(dfx identity get-principal)
 TOKEN=$(dfx canister id token)
 
-max=900000
+max=9000
 user='user'
 
 for i in `seq 2 $max`
@@ -20,6 +20,12 @@ do
     dfx identity use ident-1
     echo "dfx ledger transfer ${account_id} --amount 1000 --memo ${i}"
     dfx ledger transfer $account_id --amount 1000 --memo $i
+done
+
+for i in `seq 2 $max`
+do
+    u=$user$i
+    p=$(dfx identity get-principal)
     dfx identity use $u
     dfx canister call --identity $u nns-ledger icrc2_approve '
     record {
