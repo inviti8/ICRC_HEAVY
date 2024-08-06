@@ -12,20 +12,14 @@ user='user'
 for i in `seq 2 $max`
 do
     u=$user$i
-    p=$(dfx identity get-principal)
     dfx identity new $u --storage-mode=plaintext || true
     dfx identity use $u
+    p=$(dfx identity get-principal)
     account_id=$(dfx ledger account-id --of-principal $p)
     echo $account_id 
     dfx identity use ident-1
     echo "dfx ledger transfer ${account_id} --amount 1000 --memo ${i}"
     dfx ledger transfer $account_id --amount 1000 --memo $i
-done
-
-for i in `seq 2 $max`
-do
-    u=$user$i
-    p=$(dfx identity get-principal)
     dfx identity use $u
     dfx canister call --identity $u nns-ledger icrc2_approve '
     record {
