@@ -21,6 +21,7 @@ import Option "mo:base/Option";
 import Nat "mo:base/Nat";
 import Nat8 "mo:base/Nat8";
 import Array "mo:base/Array";
+import Debug "mo:base/Debug";
 import Map "mo:stable-hash-map/Map/Map";
 import ICPTypes "ICPTypes";
 import CkETHTypes "CkETHTypes";
@@ -422,7 +423,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var ckEthInflation : Nat = icpInflation*8;//subtracted with each new mint
   stable var ckBtcExchangeRate : Nat = icpExchangeRate*80;//640 oro for 1 ckBTC
   stable var ckBtcInflation : Nat = icpInflation*80;//subtracted with each new mint
-  stable var mintedCount = 0;
+  stable var mintedCount : Nat = 0;
 
   stable var tick = 0;
   //let interval = 88888888;
@@ -446,7 +447,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let maturity = 90;//TEST
   //let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
   let dispensation = Date.create(#Year 2023, #August, #Day 8);//TEST
-  stable var ephemeralMintCount = 0;
+  stable var ephemeralMintCount : Nat = 0;
 
   let { nhash; phash } = Map;
   let generators = Map.new<Nat, Text>(nhash);
@@ -489,6 +490,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   system func heartbeat() : async () {
     if (tick % interval == 0) {
+      Debug.print("tick");
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         let args :  ?Types.MintEphemeral = await ephemeralMint();
         switch(args){
@@ -497,12 +499,23 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           };
           case(?val){
             var memo : Blob = Text.encodeUtf8("EPHEMERAL-->ORO");
-            let mint = mintEphemeralTokens(val, memo);
+            let mint = await mintEphemeralTokens(val, memo);
+            let block = switch(mint){
+              case(#Ok(block)){
+                Debug.print("Ephemeral mint success!");
+                block;
+              };
+              case(#Err(err)){
+                Debug.print("Ephemeral mint failed!");
+                D.trap("Ephemeral mint from failed" # debug_show(err));
+              };
+            };
           };
         };
       };
       tick:=0;
     };
+    tick+=1;
   };
 
   public query func isTokenFrozen() : async ? Bool{
@@ -916,6 +929,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public query func getckBtcExchangeRate() : async Nat{
     return ckBtcExchangeRate;
+  };
+
+  public query func getNumberOfMints() : async Nat{
+    return mintedCount;
+  };
+
+  public query func getNumberOfEphemeralMints() : async Nat{
+    return ephemeralMintCount;
   };
 
   public shared ({ caller }) func burn(args : ICRC1.BurnArgs) : async ICRC1.TransferResult {
