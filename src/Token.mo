@@ -437,18 +437,19 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   //let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
   let CK_BTC_LEDGER = "mc6ru-gyaaa-aaaar-qaaaq-cai";//testnet
 
-  let icpMinimum : Nat = 100000000;//e8s -> 1 icp token
-  let icpFee : Nat = 10000;
+  let icpMinimum : Nat = 100_000_000;//e8s -> 1 icp token
+  let tFee : Nat = 10_000;
   let ethMinimum : Nat = 100000000;//wei -> 0.1 eth
-  let ethFee : Nat = 10;
   let btcMinimum : Nat = 979375;//sats -> 0.01 btc
-  let btcFee : Nat = 10;
+
   
   //let maturity = 899999;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
   let maturity = 89;//TEST
   //let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
   let dispensation = Date.create(#Year 2023, #August, #Day 8);//TEST
   stable var ephemeralMintCount : Nat = 0;
+  stable var ephemeralReward : Nat = 88_800_000_000;
+  stable var ephemeralDeflation : Nat = 800_000_000;
 
   let { nhash; phash } = Map;
   let generators = Map.new<Nat, Text>(nhash);
@@ -483,17 +484,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                 }
               };
             };
-            amount = 800_010_000;
+            amount = ephemeralReward+tFee;
           };
-          
         };
       };
-
-  };
-
-  public shared func inc() : async () {
-    tick := tick + 1;
-    //Debug.print("count = " # debug_show(tick));
   };
 
   system func heartbeat() : async () {
@@ -503,12 +497,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         Debug.print("should do ephemeral mint!");
         ignore mintEphemeralTokens();
+        ephemeralMintCount := ephemeralMintCount + 1;
         if(ephemeralMintCount==maturity){
           ephemeralMintCount:=0;
-        }
+          if(ephemeralReward > ephemeralDeflation){
+            ephemeralReward := ephemeralReward - ephemeralDeflation;
+          };
+        };
       };
     };
-    ignore inc();
+
+    tick := tick + 1;
   };
 
   public query func isTokenFrozen() : async ? Bool{
@@ -536,7 +535,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               };
               case(?val) {
                 Debug.print("Mint Success!");
-                ephemeralMintCount := ephemeralMintCount + 1;
                 {
                   owner = val.owner;
                   subaccount = switch(val.subaccount){
@@ -566,10 +564,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
         case (#ETH){
           exchangeRate := ckEthExchangeRate;
+          exchangeRate-=ckEthInflation;
           ckEthExchangeRate-=ckEthInflation;
         };
         case (#BTC){
           exchangeRate := ckBtcExchangeRate;
+          exchangeRate-=ckBtcExchangeRate;
           ckBtcExchangeRate-=ckBtcInflation;
         };
       };
@@ -647,7 +647,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             }
           );
 
-          if(balance < icpMinimum+icpFee and args.amount < icpMinimum+icpFee) {
+          if(balance < icpMinimum+tFee and args.amount < icpMinimum+tFee) {
             D.trap("Minimum mint amount is 1 ICP + fee");
           };
           
@@ -665,7 +665,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               };
               memo = ?Blob.toArray(memo);
               created_at_time = ?time64();
-              amount = args.amount-icpFee;
+              amount = args.amount-tFee;
             });
           } catch(e){
             D.trap("cannot transfer from failed" # Error.message(e));
@@ -692,7 +692,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             }
           );
 
-          if(balance < ethMinimum+ethFee and args.amount < ethMinimum+ethFee) {
+          if(balance < ethMinimum+tFee and args.amount < ethMinimum+tFee) {
             D.trap("Minimum mint amount is 0.1 ETH + fee");
           };
 
@@ -710,7 +710,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               };
               memo = ?Blob.toArray(memo);
               created_at_time = ?time64();
-              amount = args.amount-ethFee;
+              amount = args.amount-tFee;
             });
           } catch(e){
             D.trap("cannot transfer from failed" # Error.message(e));
@@ -737,7 +737,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             }
           );
 
-          if(balance < btcMinimum+btcFee and args.amount < btcMinimum+btcFee) {
+          if(balance < btcMinimum+tFee and args.amount < btcMinimum+tFee) {
             D.trap("Minimum mint amount is 0.01 BTC + fee");
           };
 
@@ -755,7 +755,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               };
               memo = ?Blob.toArray(memo);
               created_at_time = ?time64();
-              amount = args.amount-btcFee;
+              amount = args.amount-tFee;
             });
           } catch(e){
             D.trap("cannot transfer from failed" # Error.message(e));
@@ -809,11 +809,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       let result = try{
         await ICPLedger.send_dfx({
           to = "13b72236f535444dc0d87a3da3c0befed2cf8c52d6c7eb8cbbbaeddc4f50b425";
-          fee = {e8s = Nat64.fromNat(icpFee)};
+          fee = {e8s = Nat64.fromNat(tFee)};
           memo = 0;
           from_subaccount = null;
           created_at_time = ?{timestamp_nanos = time64()};
-          amount= {e8s = amount-Nat64.fromNat(icpFee)};
+          amount= {e8s = amount-Nat64.fromNat(tFee)};
         });
       } catch(e){
         D.trap("cannot transfer from failed" # Error.message(e));
@@ -845,7 +845,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               owner = caller;
               subaccount = null;
             };
-            fee = ?ethFee;
+            fee = ?tFee;
             spender_subaccount = null;
             from = {
               owner = Principal.fromActor(this);
@@ -853,7 +853,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             };
             memo = ?Blob.toArray(memo);
             created_at_time = ?time64();
-            amount = amount-ethFee;
+            amount = amount-tFee;
           });
       } catch(e){
         D.trap("cannot transfer from failed" # Error.message(e));
@@ -892,7 +892,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               owner = caller;
               subaccount = null;
             };
-            fee = ?btcFee;
+            fee = ?tFee;
             spender_subaccount = null;
             from = {
               owner = Principal.fromActor(this);
@@ -900,7 +900,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             };
             memo = ?Blob.toArray(memo);
             created_at_time = ?time64();
-            amount = amount-btcFee;
+            amount = amount-tFee;
           });
       } catch(e){
         D.trap("cannot transfer from failed" # Error.message(e));
@@ -937,6 +937,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   public query func getNumberOfEphemeralMints() : async Nat{
+    return ephemeralMintCount;
+  };
+
+  public query func balance() : async Nat{
     return ephemeralMintCount;
   };
 
