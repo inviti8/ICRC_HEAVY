@@ -449,8 +449,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   //let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
   let dispensation = Date.create(#Year 2023, #August, #Day 8);//TEST
   stable var ephemeralMintCount : Nat = 0;
-  stable var ephemeralReward : Nat = 88_800_000_000;
-  stable var ephemeralDeflation : Nat = 800_000_000;
 
   let { nhash; phash } = Map;
   let generators = Map.new<Nat, Text>(nhash);
@@ -485,10 +483,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                 }
               };
             };
-            amount = ephemeralReward+icpFee;
+            amount = 800_010_000;
           };
+          
         };
       };
+
+  };
+
+  public shared func inc() : async () {
+    tick := tick + 1;
+    //Debug.print("count = " # debug_show(tick));
   };
 
   system func heartbeat() : async () {
@@ -500,14 +505,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         ignore mintEphemeralTokens();
         if(ephemeralMintCount==maturity){
           ephemeralMintCount:=0;
-          if(ephemeralReward > ephemeralDeflation){
-            ephemeralReward := ephemeralReward - ephemeralDeflation;
-          };
-        };
+        }
       };
     };
-
-    tick := tick + 1;
+    ignore inc();
   };
 
   public query func isTokenFrozen() : async ? Bool{
@@ -565,12 +566,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
         case (#ETH){
           exchangeRate := ckEthExchangeRate;
-          exchangeRate-=ckEthInflation;
           ckEthExchangeRate-=ckEthInflation;
         };
         case (#BTC){
           exchangeRate := ckBtcExchangeRate;
-          exchangeRate-=ckBtcExchangeRate;
           ckBtcExchangeRate-=ckBtcInflation;
         };
       };
