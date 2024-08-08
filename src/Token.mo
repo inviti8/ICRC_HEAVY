@@ -506,9 +506,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       Debug.print("maturity = " # debug_show(maturity));
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         Debug.print("should do ephemeral mint!");
-        if(ephemeralMintCount == 0){
-          ephemeralMintCount := 1;
-        };
+
         if(ephemeralRewardCycle == 0){
           ephemeralRewardCycle := 1;
         };
@@ -517,7 +515,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           ignore mintEphemeralTokens();
           ephemeralMintCount := ephemeralMintCount + 1;
           if(ephemeralMintCount==maturity){
-            ephemeralMintCount:=1;
+            ephemeralMintCount:=0;
             ephemeralRewardCycle := ephemeralRewardCycle + 1;
             if(ephemeralReward > ephemeralDeflation){
               ephemeralReward := ephemeralReward - ephemeralDeflation;
