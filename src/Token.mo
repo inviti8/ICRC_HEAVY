@@ -427,10 +427,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var mintedCount : Nat = 0;
 
   var tick = 0;
-  var count = 0;
-  //let interval = 88888888;
-  let interval = 88;//TEST
-
 
   let ICP_LEDGER = "ryjl3-tyaaa-aaaaa-aaaba-cai";
   //let CK_ETH_LEDGER = "ss2fx-dyaaa-aaaar-qacoq-cai";
@@ -438,18 +434,18 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   //let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
   let CK_BTC_LEDGER = "mc6ru-gyaaa-aaaar-qaaaq-cai";//testnet
 
-  let icpMinimum : Nat = 100_000_000;//e8s -> 1 icp token
+  let icpMinimum : Nat = 1_000_000_000;//e8s -> 10 icp token
   let icpFee : Nat = 10_000;
-  let ethMinimum : Nat = 1_000_000_000_000_000;// wei -> 0.001 eth
+  let ethMinimum : Nat = 10_000_000_000_000_000;// wei -> 0.01 eth
   let ethFee : Nat = 200;//0.000002 ckETH
-  let btcMinimum : Nat = 10_000;//sats -> 0.0001 btc
+  let btcMinimum : Nat = 100_000;//sats -> 0.001 btc
   let btcFee : Nat = 10;//0.0000001 ckBTC
 
   stable var icpTreasury : Nat = 0;
   stable var ethTreasury : Nat = 0;
   stable var btcTreasury : Nat = 0;
   
-  let founded = Date.create(#Year 2024, #August, #Day 8);
+  let initiated = Date.create(#Year 2024, #August, #Day 8);
   //let maturity = 899999;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
   let maturity = 89;//TEST
   //let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
@@ -459,6 +455,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var ephemeralReward : Nat = 888_0000_0000_0000_0000;
   stable var ephemeralDeflation : Nat = 8_0000_0000_0000_0000;
   stable var ephemeralMintedBalance : Nat = 0;
+  stable var ephemeralRewardCycle : Nat = 0;
+    //let ephemeralRewardInterval = 888888;
+  let ephemeralRewardInterval = 88;//TEST
 
   let { nhash; phash } = Map;
   let generators = Map.new<Nat, Text>(nhash);
@@ -500,15 +499,19 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   system func heartbeat() : async () {
-    if (tick % interval == 0) {
+    if (tick % ephemeralRewardInterval == 0) {
       Debug.print("mintedCount = " # debug_show(mintedCount));
       Debug.print("maturity = " # debug_show(maturity));
       if(mintedCount >= maturity){//at maturity ephemeral mint starts
         Debug.print("should do ephemeral mint!");
+        if(ephemeralRewardCycle == 0){
+          ephemeralRewardCycle := 1;
+        };
         ignore mintEphemeralTokens();
         ephemeralMintCount := ephemeralMintCount + 1;
         if(ephemeralMintCount==maturity){
           ephemeralMintCount:=0;
+          ephemeralRewardCycle := ephemeralRewardCycle + 1;
           if(ephemeralReward > ephemeralDeflation){
             ephemeralReward := ephemeralReward - ephemeralDeflation;
           };
@@ -930,24 +933,52 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       result;
   };
 
-  public query ({ caller }) func getGeneratorEpoch() : async ?Nat{
-    return Map.get(generator_principals, phash, caller);
+  public query func getGeneratorEpoch(args : ICRC1.Account) : async ?Nat{
+    return Map.get(generator_principals, phash, args.owner);
+  };
+
+  public query func icpMinimumTokensRequired() : async Nat{
+    return icpMinimum;
   };
 
   public query func getIcpExchangeRate() : async Nat{
     return icpExchangeRate;
   };
 
+  public query func icpTreasuryTotalCollected() : async Nat{
+    return icpTreasury;
+  };
+
+  public query func ethMinimumTokensRequired() : async Nat{
+    return ethMinimum;
+  };
+
   public query func getckEthExchangeRate() : async Nat{
     return ckEthExchangeRate;
+  };
+
+  public query func ethTreasuryTotalCollected() : async Nat{
+    return ethTreasury;
+  };
+
+  public query func btcMinimumTokensRequired() : async Nat{
+    return btcMinimum;
   };
 
   public query func getckBtcExchangeRate() : async Nat{
     return ckBtcExchangeRate;
   };
 
+  public query func btcTreasuryTotalCollected() : async Nat{
+    return btcTreasury;
+  };
+
   public query func getNumberOfMints() : async Nat{
     return mintedCount;
+  };
+
+  public query func getCurrentRewardCycle() : async Nat{
+    return ephemeralRewardCycle;
   };
 
   public query func getNumberOfEphemeralMints() : async Nat{
@@ -964,11 +995,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     return Float.fromInt(balance)
   };
 
-  public shared func totalEphemeralMintedBalance(args : ICRC1.Account) : async Float{
+  public shared func totalEphemeralMintedBalance() : async Float{
     return Float.fromInt(ephemeralMintedBalance)
   };
 
-  public shared func totalGeneratorMintedBalance(args : ICRC1.Account) : async Float{
+  public shared func totalGeneratorMintedBalance() : async Float{
     return Float.fromInt(generatorMintedBalance)
   };
 
