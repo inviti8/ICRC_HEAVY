@@ -468,16 +468,16 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var generatorMintedBalance : Nat = 0;
 
 
-  private func ephemeralMint() : async ?Types.MintEphemeral {
+  private func ephemeralMint(acct : Nat) : async ?Types.MintEphemeral {
 
-    return switch(Map.get<Nat, Text>(generators, nhash, ephemeralMintCount)){//if generator exists, tokens are minted to them
+    return switch(Map.get<Nat, Text>(generators, nhash, acct)){//if generator exists, tokens are minted to them
         case(null){
           D.trap("Cannot Perform Ephemeral Mint.");
         };
         case(?gen){
 
           ?{
-            target = switch(Map.get<Nat, ?[Nat8]>(generator_accounts, nhash, ephemeralMintCount)){
+            target = switch(Map.get<Nat, ?[Nat8]>(generator_accounts, nhash, acct)){
               case(null){
                 ?{
                   owner = Principal.fromText(gen);
@@ -512,7 +512,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
 
         for (number in Iter.range(1, ephemeralAllocationSet)) {
-          ignore mintEphemeralTokens();
+          ignore mintEphemeralTokens(ephemeralMintCount);
           ephemeralMintCount := ephemeralMintCount + 1;
           if(ephemeralMintCount==maturity){
             ephemeralMintCount:=0;
@@ -536,8 +536,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
-  private func mintEphemeralTokens() : async () {
-    let args :  ?Types.MintEphemeral = await ephemeralMint();
+  private func mintEphemeralTokens(acct : Nat) : async () {
+    let args :  ?Types.MintEphemeral = await ephemeralMint(acct);
     var memo : Blob = Text.encodeUtf8("EPHEMERAL-->ORO");
     Debug.print("EPHEMERAL MINT!");
     switch(args){
@@ -553,7 +553,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                 D.trap("Mint target not found.");
               };
               case(?val) {
-                Debug.print("Mint Success!" # debug_show(ephemeralMintCount));
+                Debug.print("Mint Success!" # debug_show(acct));
                 {
                   owner = val.owner;
                   subaccount = switch(val.subaccount){
