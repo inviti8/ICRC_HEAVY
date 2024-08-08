@@ -23,6 +23,7 @@ import Nat8 "mo:base/Nat8";
 import Array "mo:base/Array";
 import Debug "mo:base/Debug";
 import Float "mo:base/Float";
+import Iter "mo:base/Iter";
 import Map "mo:stable-hash-map/Map/Map";
 import ICPTypes "ICPTypes";
 import CkETHTypes "CkETHTypes";
@@ -39,7 +40,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
     let default_icrc1_args : ICRC1.InitArgs = {
       name = ?"Oro";
-      symbol = ?"ORO";
+      symbol = ?"XRO";
       logo = ?"data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InJlZCIvPjwvc3ZnPg==";
       decimals = 16;
       fee = ?#Fixed(10000);
@@ -446,7 +447,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var btcTreasury : Nat = 0;
   
   let initiated = Date.create(#Year 2024, #August, #Day 8);
-  //let maturity = 899999;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
+  //let maturity = 89999;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
   let maturity = 89;//TEST
   //let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
   let dispensation = Date.create(#Year 2023, #August, #Day 8);//TEST
@@ -458,6 +459,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var ephemeralRewardCycle : Nat = 0;
     //let ephemeralRewardInterval = 888888;
   let ephemeralRewardInterval = 88;//TEST
+  let ephemeralAllocationSet = 10;
 
   let { nhash; phash } = Map;
   let generators = Map.new<Nat, Text>(nhash);
@@ -507,15 +509,19 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         if(ephemeralRewardCycle == 0){
           ephemeralRewardCycle := 1;
         };
-        ignore mintEphemeralTokens();
-        ephemeralMintCount := ephemeralMintCount + 1;
-        if(ephemeralMintCount==maturity){
-          ephemeralMintCount:=0;
-          ephemeralRewardCycle := ephemeralRewardCycle + 1;
-          if(ephemeralReward > ephemeralDeflation){
-            ephemeralReward := ephemeralReward - ephemeralDeflation;
-          };
+
+        for (number in Iter.range(1, ephemeralAllocationSet)) {
+          ignore mintEphemeralTokens();
+          ephemeralMintCount := ephemeralMintCount + 1;
+          if(ephemeralMintCount==maturity){
+            ephemeralMintCount:=0;
+            ephemeralRewardCycle := ephemeralRewardCycle + 1;
+            if(ephemeralReward > ephemeralDeflation){
+              ephemeralReward := ephemeralReward - ephemeralDeflation;
+            };
+          }; 
         };
+
       };
     };
 
@@ -546,7 +552,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                 D.trap("Mint target not found.");
               };
               case(?val) {
-                Debug.print("Mint Success!");
+                Debug.print("Mint Success!" # debug_show(ephemeralMintCount));
                 {
                   owner = val.owner;
                   subaccount = switch(val.subaccount){
