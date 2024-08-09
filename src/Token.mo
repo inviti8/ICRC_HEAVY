@@ -438,7 +438,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let icpMinimum : Nat = 1_000_000_000;//e8s -> 10 icp token
   let icpFee : Nat = 10_000;
   let ethMinimum : Nat = 10_000_000_000_000_000;// wei -> 0.01 eth
-  let ethFee : Nat = 200;//0.000002 ckETH
+  let ethFee : Nat = 21_000;//0.000002 ckETH
   let btcMinimum : Nat = 100_000;//sats -> 0.001 btc
   let btcFee : Nat = 10;//0.0000001 ckBTC
 
@@ -475,7 +475,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           D.trap("Cannot Perform Ephemeral Mint.");
         };
         case(?gen){
-
           ?{
             target = switch(Map.get<Nat, ?[Nat8]>(generator_accounts, nhash, acct)){
               case(null){
@@ -511,7 +510,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           ephemeralRewardCycle := 1;
         };
 
-        for (number in Iter.range(1, ephemeralAllocationSet)) {
+        for (number in Iter.range(0, ephemeralAllocationSet)) {
           ignore mintEphemeralTokens(ephemeralMintCount);
           ephemeralMintCount := ephemeralMintCount + 1;
           if(ephemeralMintCount==maturity){
@@ -527,13 +526,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
 
     tick := tick + 1;
-  };
-
-  public query func isTokenFrozen() : async ? Bool{
-    return do ? {
-        let unpacked = dispensation!;
-        Date.isFutureDate(unpacked);
-    };
   };
 
   private func mintEphemeralTokens(acct : Nat) : async () {
@@ -562,7 +554,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                   };
                 }
               };
-            };               // The account receiving the newly minted tokens.
+            };
           amount = arg.amount;           // The number of tokens to mint.
           created_at_time = ?time64();
           memo = ?(memo);
@@ -814,7 +806,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       return result;
   };
 
-  public shared ({ caller }) func withdrawICP(amount : Nat64) : async Nat64 {
+  public shared ({ caller }) func OLDWithdrawICP(amount : Nat64) : async Nat64 {
 
       let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
 
@@ -841,6 +833,53 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         });
       } catch(e){
         D.trap("cannot transfer from failed" # Error.message(e));
+      };
+
+      result;
+  };
+
+  public shared ({ caller }) func withdrawICP(amount : Nat) : async ICPTypes.Result_2 {
+
+      let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
+      var memo : Blob = Text.encodeUtf8("ICP-OUT");
+
+      // check ICP balance of the callers dedicated account
+      let balance = await ICPLedger.icrc1_balance_of(
+        {
+          owner = Principal.fromActor(this);
+          subaccount = null;
+        }
+      );
+
+      if(balance < icpMinimum and amount < icpMinimum){
+        D.trap("Minimum withdrawal amount is 2 ICP");
+      };
+
+      let result = try{
+        await ICPLedger.icrc2_transfer_from({
+            to = {
+              owner = caller;
+              subaccount = null;
+            };
+            fee = ?icpFee;
+            spender_subaccount = null;
+            from = {
+              owner = Principal.fromActor(this);
+              subaccount = null;
+            };
+            memo = ?Blob.toArray(memo);
+            created_at_time = ?time64();
+            amount = amount-icpFee;
+          });
+      } catch(e){
+        D.trap("cannot transfer from failed" # Error.message(e));
+      };
+
+      let block = switch(result){
+        case(#Ok(block)) block;
+        case(#Err(err)){
+          D.trap("cannot transfer from failed" # debug_show(err));
+        };
       };
 
       result;
@@ -938,6 +977,13 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
 
       result;
+  };
+
+  public query func isTokenFrozen() : async ? Bool{
+    return do ? {
+        let unpacked = dispensation!;
+        Date.isFutureDate(unpacked);
+    };
   };
 
   public query func getGeneratorEpoch(args : ICRC1.Account) : async ?Nat{
