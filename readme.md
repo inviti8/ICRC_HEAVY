@@ -1,7 +1,7 @@
 # ORO Utitlity Token
 
 ## Overview
-This is the official repo for the Oro utiltiy token to be in the Heavymeta Platform. This repo is a fork of: https://github.com/PanIndustrial-Org/ICRC_fungible
+This is the official repo for the Oro utiltiy token to be used in the Heavymeta Platform. This repo is a fork of: https://github.com/PanIndustrial-Org/ICRC_fungible
 
 ## Contents
 - `dfx.json`: Configuration file for project settings and canister definitions.
