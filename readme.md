@@ -1,16 +1,16 @@
-# ICRC-1, ICRC-2, and ICRC-3 Fungible Token
+# ORO Utitlity Token
 
 ## Overview
-This project is focused on the development and implementation of a fungible token standard, utilizing blockchain or distributed ledger technology. The core of the project is written in Motoko and is compatibility with the DFINITY Internet Computer platform.
+This is the official repo for the Oro utiltiy token to be in the Heavymeta Platform. This repo is a fork of: https://github.com/PanIndustrial-Org/ICRC_fungible
 
 ## Contents
 - `dfx.json`: Configuration file for project settings and canister definitions.
 - `mops.toml`: Dependency management file listing various Motoko libraries and tools.
 - `runners/test_deploy.sh`: Script for testing or deploying the token system.
 - `runners/prod_deploy.sh`: Script for deploying to production token system.
+- `runners/test_lifecycle.sh`: Script for testing life cycle of the token
 - `src/Token.mo`: Source code for the token system written in Motoko.
-- `src/examples/Allowlist.mo`: Source code for the a token who is limited to an allow list of users who can send tokens, but anyone can receive them. See the source file for more information.
-- `src/examples/Lotto.mo`: Source code for a token where whenever you burn tokens you have a chance to double your tokens. See the source file for more information.
+
 
 ## Setup and Installation
 1. **Environment Setup**: Ensure you have an environment that supports Motoko programming. This typically involves setting up the [DFINITY Internet Computer SDK](https://internetcomputer.org/docs/current/references/cli-reference/dfx-parent) and [mops tool chain](https://docs.mops.one/quick-start).
@@ -26,16 +26,19 @@ This project is focused on the development and implementation of a fungible toke
 - DFX and Mops
 - Additional dependencies are listed in `mops.toml`. Ensure they are properly installed and configured.
 
+## Testing
+- See testing.md
+
 ## Contribution and Development Guidelines
 - **Coding Standards**: Adhere to established Motoko coding practices. Ensure readability and maintainability of the code.
 - **Testing**: Thoroughly test any new features or changes in a controlled environment before integrating them into the main project.
 - **Documentation**: Update documentation and comments within the code to reflect changes or additions to the project.
 
 ## Repository
-- [Project Repository](https://github.com/PanIndustrial-Org/ICRC_fungible)
+- [Project Repository](https://github.com/inviti8/ICRC_HEAVY)
 
 ## License
-- MIT License
+- ALL RIGHTS RESERVED
 
 ## Contact
 - **Contributing**: For contributing to this project, please submit a pull request to the repository.
