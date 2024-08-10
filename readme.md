@@ -1,4 +1,4 @@
-# ORO Utitlity Token
+# ORO Utility Token
 
 ## Overview
 This is the official repo for the Oro utiltiy token to be used in the Heavymeta Platform. This repo is a fork of: https://github.com/PanIndustrial-Org/ICRC_fungible
