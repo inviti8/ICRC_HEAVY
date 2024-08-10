@@ -454,7 +454,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   stable var ephemeralMintCount : Nat = 0;
   stable var ephemeralReward : Nat = 888_0000_0000_0000_0000;
-  stable var ephemeralDeflation : Nat = 8_0000_0000_0000_0000;
   stable var ephemeralMintedBalance : Nat = 0;
   stable var ephemeralRewardCycle : Nat = 0;
     //let ephemeralRewardInterval = 888888;
@@ -516,8 +515,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           if(ephemeralMintCount==maturity){
             ephemeralMintCount:=0;
             ephemeralRewardCycle := ephemeralRewardCycle + 1;
-            if(ephemeralReward > ephemeralDeflation){
-              ephemeralReward := ephemeralReward - ephemeralDeflation;
+            if(ephemeralRewardCycle  < 80){// cap to 80 cycles, approximately 80 years
+              ephemeralReward := (ephemeralReward / 8) * 7;//Reward decreased by 1/8
             };
           }; 
         };
