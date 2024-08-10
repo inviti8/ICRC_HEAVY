@@ -1044,7 +1044,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           subaccount = args.subaccount;
       }
     ); 
-    return Float.fromInt(balance)
+    return Float.fromInt(balance / 1_0000_0000_0000_0000)
   };
 
   public shared func totalEphemeralMintedBalance() : async Float{
