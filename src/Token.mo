@@ -438,9 +438,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let icpMinimum : Nat = 1_000_000_000;//e8s -> 10 icp token
   let icpFee : Nat = 10_000;
   let ethMinimum : Nat = 10_000_000_000_000_000;// wei -> 0.01 eth
-  let ethFee : Nat = 21_000;//0.000002 ckETH
+  let ethFee : Nat = 2_000_000_000_000;//0.000002 ckETH
   let btcMinimum : Nat = 100_000;//sats -> 0.001 btc
   let btcFee : Nat = 10;//0.0000001 ckBTC
+  let oroFee : Nat = 10000; // 0.000000000001 oro 
 
   stable var icpTreasury : Nat = 0;
   stable var ethTreasury : Nat = 0;
@@ -456,7 +457,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var ephemeralReward : Nat = 888_0000_0000_0000_0000;
   stable var ephemeralMintedBalance : Nat = 0;
   stable var ephemeralRewardCycle : Nat = 0;
-    //let ephemeralRewardInterval = 888888;
+    //let ephemeralRewardInterval = 86400; // 1 day = 86400 sec
   let ephemeralRewardInterval = 88;//TEST
   let ephemeralAllocationSet = 10;
 
@@ -492,7 +493,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                 }
               };
             };
-            amount = ephemeralReward+icpFee;
+            amount = ephemeralReward+oroFee;
           };
         };
       };
@@ -509,7 +510,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           ephemeralRewardCycle := 1;
         };
 
-        for (number in Iter.range(0, ephemeralAllocationSet)) {
+        for (number in Iter.range(1, ephemeralAllocationSet)) {
           ignore mintEphemeralTokens(ephemeralMintCount);
           ephemeralMintCount := ephemeralMintCount + 1;
           if(ephemeralMintCount==maturity){
@@ -579,14 +580,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
         case (#BTC){
           exchangeRate := ckBtcExchangeRate;
-          exchangeRate-=ckBtcExchangeRate;
+          exchangeRate-=ckBtcInflation;
           ckBtcExchangeRate-=ckBtcInflation;
         };
       };
     };
     
     var mintingAmount : Nat = exchangeRate * args.amount;
-    generatorMintedBalance := mintingAmount + mintingAmount;
+    generatorMintedBalance := generatorMintedBalance + mintingAmount;
     mintedCount := mintedCount + 1;
 
     let newtokens =  await* icrc1().mint_tokens(Principal.fromActor(this), {
@@ -681,7 +682,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
           let block = switch(result){
             case(#Ok(block)){
-              icpTreasury := icpTreasury + args.amount;
+              icpTreasury := icpTreasury + args.amount - icpFee;
               block;
             };
             case(#Err(err)){
@@ -703,7 +704,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             }
           );
 
-          if(balance < ethMinimum+icpFee and args.amount < ethMinimum+icpFee) {
+          if(balance < ethMinimum+ethFee and args.amount < ethMinimum+ethFee) {
             D.trap("Minimum mint amount is 0.1 ETH + fee");
           };
 
@@ -729,7 +730,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
           let block = switch(result){
             case(#Ok(block)){
-              ethTreasury := ethTreasury + args.amount;
+              ethTreasury := ethTreasury + args.amount - ethFee;
               block;
             };
             case(#Err(err)){
@@ -751,7 +752,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             }
           );
 
-          if(balance < btcMinimum+icpFee and args.amount < btcMinimum+icpFee) {
+          if(balance < btcMinimum+btcFee and args.amount < btcMinimum+btcFee) {
             D.trap("Minimum mint amount is 0.01 BTC + fee");
           };
 
@@ -777,7 +778,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
           let block = switch(result){
             case(#Ok(block)){
-              btcTreasury := btcTreasury + args.amount;
+              btcTreasury := btcTreasury + args.amount - btcFee;
               block;
             };
             case(#Err(err)){
@@ -805,44 +806,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       return result;
   };
 
-  public shared ({ caller }) func OLDWithdrawICP(amount : Nat64) : async Nat64 {
-
-      let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
-
-      // check ICP balance of the callers dedicated account
-      let balance = await ICPLedger.icrc1_balance_of(
-        {
-          owner = Principal.fromActor(this);
-          subaccount = null;
-        }
-      );
-
-      if(balance < icpMinimum and amount < Nat64.fromNat(icpMinimum)){
-        D.trap("Minimum withdrawal amount is 2 ICP");
-      };
-
-      let result = try{
-        await ICPLedger.send_dfx({
-          to = "13b72236f535444dc0d87a3da3c0befed2cf8c52d6c7eb8cbbbaeddc4f50b425";
-          fee = {e8s = Nat64.fromNat(icpFee)};
-          memo = 0;
-          from_subaccount = null;
-          created_at_time = ?{timestamp_nanos = time64()};
-          amount= {e8s = amount-Nat64.fromNat(icpFee)};
-        });
-      } catch(e){
-        D.trap("cannot transfer from failed" # Error.message(e));
-      };
-
-      result;
-  };
-
   public shared ({ caller }) func withdrawICP(amount : Nat) : async ICPTypes.Result_2 {
 
       let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
       var memo : Blob = Text.encodeUtf8("ICP-OUT");
 
-      // check ICP balance of the callers dedicated account
+      // check ICP balance of the canister
       let balance = await ICPLedger.icrc1_balance_of(
         {
           owner = Principal.fromActor(this);
@@ -850,8 +819,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         }
       );
 
-      if(balance < icpMinimum and amount < icpMinimum){
-        D.trap("Minimum withdrawal amount is 2 ICP");
+      if(balance < amount + icpFee){
+        D.trap("Not enough Balance");
       };
 
       let result = try{
@@ -875,7 +844,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
 
       let block = switch(result){
-        case(#Ok(block)) block;
+        case(#Ok(block)) {
+          icpTreasury -= (amount + icpFee);
+          block;
+        };
         case(#Err(err)){
           D.trap("cannot transfer from failed" # debug_show(err));
         };
@@ -889,7 +861,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       let ETHLedger : CkETHTypes.Service = actor(CK_ETH_LEDGER);
       var memo : Blob = Text.encodeUtf8("ckETH-OUT");
 
-      // check ckETH balance of the callers dedicated account
+      // check ckETH balance of the canister
       let balance = await ETHLedger.icrc1_balance_of(
         {
           owner = Principal.fromActor(this);
@@ -897,8 +869,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         }
       );
 
-      if(balance < ethMinimum and amount < ethMinimum){
-        D.trap("Minimum withdrawal amount is 0.1 ckETH");
+      if(balance < amount + ethFee){
+        D.trap("Not enough Balance");
       };
 
       let result = try{
@@ -907,7 +879,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               owner = caller;
               subaccount = null;
             };
-            fee = ?icpFee;
+            fee = ?ethFee;
             spender_subaccount = null;
             from = {
               owner = Principal.fromActor(this);
@@ -915,14 +887,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             };
             memo = ?Blob.toArray(memo);
             created_at_time = ?time64();
-            amount = amount-icpFee;
+            amount = amount-ethFee;
           });
       } catch(e){
         D.trap("cannot transfer from failed" # Error.message(e));
       };
 
       let block = switch(result){
-        case(#Ok(block)) block;
+        case(#Ok(block)) {
+          ethTreasury -= (amount + ethFee);
+          block;
+        };
         case(#Err(err)){
           D.trap("cannot transfer from failed" # debug_show(err));
         };
@@ -936,7 +911,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       let BTCLedger : CkBTCTypes.Service = actor(CK_BTC_LEDGER);
       var memo : Blob = Text.encodeUtf8("ckBTC-OUT");
 
-      // check ckBTC balance of the callers dedicated account
+      // check ckBTC balance of the canister
       let balance = await BTCLedger.icrc1_balance_of(
         {
           owner = Principal.fromActor(this);
@@ -944,8 +919,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         }
       );
 
-      if(balance < btcMinimum and amount < btcMinimum){
-        D.trap("Minimum withdrawal amount is 0.01 ckBTC");
+      if(balance < amount + btcFee){
+        D.trap("Not enough Balance");
       };
 
       let result = try{
@@ -954,7 +929,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               owner = caller;
               subaccount = null;
             };
-            fee = ?icpFee;
+            fee = ?btcFee;
             spender_subaccount = null;
             from = {
               owner = Principal.fromActor(this);
@@ -962,14 +937,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             };
             memo = ?Blob.toArray(memo);
             created_at_time = ?time64();
-            amount = amount-icpFee;
+            amount = amount-btcFee;
           });
       } catch(e){
         D.trap("cannot transfer from failed" # Error.message(e));
       };
 
       let block = switch(result){
-        case(#Ok(block)) block;
+        case(#Ok(block)){
+          btcTreasury -= (amount + btcFee);
+          block;
+        };
         case(#Err(err)){
           D.trap("cannot transfer from failed" # debug_show(err));
         };
