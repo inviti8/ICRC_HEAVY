@@ -1,0 +1,26 @@
+# Various IDEs and Editors
+.vscode/
+.idea/
+**/*~
+
+# Mac OSX temporary files
+.DS_Store
+**/.DS_Store
+
+# dfx temporary files
+.dfx/
+
+# generated files
+**/declarations/
+
+#mops packages
+.mops
+
+#environment variable
+.env
+
+#identity
+ident-1.pem
+
+#nns candid files
+candid
