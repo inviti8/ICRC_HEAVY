@@ -29,6 +29,7 @@ import ICPTypes "ICPTypes";
 import CkETHTypes "CkETHTypes";
 import CkBTCTypes "CkBTCTypes";
 import Date "Date";
+import Components "mo:datetime/Components";
 
 shared ({ caller = _owner }) actor class Token  (args: ?{
     icrc1 : ?ICRC1.InitArgs;
@@ -447,11 +448,25 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var ethTreasury : Nat = 0;
   stable var btcTreasury : Nat = 0;
   
-  let initiated = Date.create(#Year 2024, #August, #Day 8);
+  let initiated : Components.Components = {
+    year = 2024;
+    month = 8;
+    day = 8;
+    hour = 0;
+    minute = 0;
+    nanosecond = 0;
+  };
   //let maturity = 89999;//After this many mint calls, the price per oro in icp, eth, or btc becomes quite high
   let maturity = 89;//TEST
   //let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
-  let dispensation = Date.create(#Year 2023, #August, #Day 8);//TEST
+  let dispensation : Components.Components = {
+    year = 2024;
+    month = 8;
+    day = 8;
+    hour = 0;
+    minute = 0;
+    nanosecond = 0;
+  };//TEST
 
   stable var ephemeralMintCount : Nat = 0;
   stable var ephemeralReward : Nat = 888_0000_0000_0000_0000;
@@ -958,8 +973,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public query func isTokenFrozen() : async ? Bool{
     return do ? {
-        let unpacked = dispensation!;
-        Date.isFutureDate(unpacked);
+        Date.isFutureDate(dispensation);
     };
   };
 
