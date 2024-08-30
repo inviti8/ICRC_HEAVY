@@ -1,120 +1,97 @@
 import Int "mo:base/Int";
+import Nat "mo:base/Nat";
+import Components "mo:datetime/Components";
 
 module DateTypes {
 
   /**
    * A type to represent a year.
    */
-  public type Year = {
-    #Year : Int;
-  };
+  public type Year = Int;
 
   /**
    * Show a year.
    */
   public func showYear(year : Year) : Text {
-    let #Year n = year;
-    Int.toText(n)
+    Int.toText(year)
   };
 
   /**
    * A type to represent a month.
    */
-  public type Month = {
-    #January;
-    #February;
-    #March;
-    #April;
-    #May;
-    #June;
-    #July;
-    #August;
-    #September;
-    #October;
-    #November;
-    #December;
-  };
+  public type Month = Nat;
 
   /**
    * Show a month.
    */
   public func showMonth(month : Month) : Text {
     switch (month) {
-      case (#January) "January";
-      case (#February) "February";
-      case (#March) "March";
-      case (#April) "April";
-      case (#May) "May";
-      case (#June) "June";
-      case (#July) "July";
-      case (#August) "August";
-      case (#September) "September";
-      case (#October) "October";
-      case (#November) "November";
-      case (#December) "December";
+      case (1) "January";
+      case (2) "February";
+      case (3) "March";
+      case (4) "April";
+      case (5) "May";
+      case (6) "June";
+      case (7) "July";
+      case (8) "August";
+      case (9) "September";
+      case (10) "October";
+      case (11) "November";
+      case (12) "December";
+      case (_) "Invalid";
     }
   };
 
   /**
    * Show a month using its abbreviation.
    */
-  public func showMonthShort(month : Month) : Text {
+  public func showMonthShort(month : Int) : Text {
     switch (month) {
-      case (#January) "Jan";
-      case (#February) "Feb";
-      case (#March) "Mar";
-      case (#April) "Apr";
-      case (#May) "May";
-      case (#June) "Jun";
-      case (#July) "Jul";
-      case (#August) "Aug";
-      case (#September) "Sep";
-      case (#October) "Oct";
-      case (#November) "Nov";
-      case (#December) "Dec";
+      case (1) "Jan";
+      case (2) "Feb";
+      case (3) "Mar";
+      case (4) "Apr";
+      case (5) "May";
+      case (6) "Jun";
+      case (7) "Jul";
+      case (8) "Aug";
+      case (9) "Sep";
+      case (10) "Oct";
+      case (11) "Nov";
+      case (12) "Dec";
+      case (_) "Invalid";
     }
   };
 
   /**
    * A type to represent a day.
    */
-  public type Day = {
-    #Day : Int;
-  };
+  public type Day = Nat;
 
   /**
    * Show a day.
    */
   public func showDay(day : Day) : Text {
-    let #Day n = day;
-    Int.toText(n)
+    Nat.toText(day)
   };
 
   /**
    * A type to represent a day of the week.
    */
-  public type DayOfWeek = {
-    #Sunday;
-    #Monday;
-    #Tuesday;
-    #Wednesday;
-    #Thursday;
-    #Friday;
-    #Saturday;
-  };
+  public type DayOfWeek = Components.DayOfWeek;
 
   /**
    * Show a day of the week.
    */
   public func showDayOfWeek(wday : DayOfWeek) : Text {
     switch (wday) {
-      case (#Sunday) "Sunday";
-      case (#Monday) "Monday";
-      case (#Tuesday) "Tuesday";
-      case (#Wednesday) "Wednesday";
-      case (#Thursday) "Thursday";
-      case (#Friday) "Friday";
-      case (#Saturday) "Saturday";
+      case (#sunday) "Sunday";
+      case (#monday) "Monday";
+      case (#tuesday) "Tuesday";
+      case (#wednesday) "Wednesday";
+      case (#thursday) "Thursday";
+      case (#friday) "Friday";
+      case (#saturday) "Saturday";
     }
   };
 
@@ -123,74 +100,62 @@ module DateTypes {
    */
   public func showDayOfWeekShort(wday : DayOfWeek) : Text {
     switch (wday) {
-      case (#Sunday) "Sun";
-      case (#Monday) "Mon";
-      case (#Tuesday) "Tue";
-      case (#Wednesday) "Wed";
-      case (#Thursday) "Thu";
-      case (#Friday) "Fri";
-      case (#Saturday) "Sat";
+      case (#sunday) "Sun";
+      case (#monday) "Mon";
+      case (#tuesday) "Tue";
+      case (#wednesday) "Wed";
+      case (#thursday) "Thu";
+      case (#friday) "Fri";
+      case (#saturday) "Sat";
     }
   };
 
   /**
    * A type to represent a hour.
    */
-  public type Hour = {
-    #Hour : Int;
-  };
+  public type Hour = Nat;
 
   /**
    * Show a hour.
    */
   public func showHour(hour : Hour) : Text {
-    let #Hour n = hour;
-    Int.toText(n)
+    Nat.toText(hour)
   };
 
   /**
    * A type to represent a minute.
    */
-  public type Minute = {
-    #Minute : Int;
-  };
+  public type Minute = Nat;
 
   /**
    * Show a minute.
    */
   public func showMinute(min : Minute) : Text {
-    let #Minute n = min;
-    Int.toText(n)
+    Nat.toText(min);
   };
 
   /**
    * A type to represent a second.
    */
-  public type Second = {
-    #Second : Int;
-  };
+  public type Second = Nat;
 
   /**
    * Show a second.
    */
   public func showSecond(sec : Second) : Text {
-    let #Second n = sec;
-    Int.toText(n)
+    Nat.toText(sec);
   };
 
   /**
    * A type to represent a nanosecond.
    */
-  public type Nanos = {
-    #Nanos : Int;
-  };
+  public type Nanos = Nat;
 
   /**
    * Show a nanosecond.
    */
   public func showNanos(nanos : Nanos) : Text {
-    let #Nanos n = nanos;
-    Int.toText(n)
+    Nat.toText(nanos)
   };
 
   /**
@@ -206,9 +171,10 @@ module DateTypes {
   /**
    * Show the parts of a date.
    */
-  public func showDateParts(parts : DateParts) : Text {
+  public func showDateParts(parts : Components.Components) : Text {
     var accum = "";
-    accum #= showDayOfWeekShort(parts.wday);
+    let wday : Components.DayOfWeek = Components.dayOfWeek(parts);
+    accum #= showDayOfWeekShort(wday);
     accum #= " ";
     accum #= showMonthShort(parts.month);
     accum #= " ";
