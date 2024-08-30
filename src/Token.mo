@@ -431,10 +431,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   var tick = 0;
 
   let ICP_LEDGER = "ryjl3-tyaaa-aaaaa-aaaba-cai";
-  //let CK_ETH_LEDGER = "ss2fx-dyaaa-aaaar-qacoq-cai";
-  let CK_ETH_LEDGER = "sh5u2-cqaaa-aaaar-qacna-cai";//testnet
-  //let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
-  let CK_BTC_LEDGER = "mc6ru-gyaaa-aaaar-qaaaq-cai";//testnet
+  let CK_ETH_LEDGER = "ss2fx-dyaaa-aaaar-qacoq-cai";
+  // let CK_ETH_LEDGER = "sh5u2-cqaaa-aaaar-qacna-cai";//testnet
+  let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
+  // let CK_BTC_LEDGER = "mc6ru-gyaaa-aaaar-qaaaq-cai";//testnet
 
   let icpMinimum : Nat = 1_000_000_000;//e8s -> 10 icp token
   let icpFee : Nat = 10_000;
@@ -460,7 +460,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let maturity = 89;//TEST
   //let dispensation = Date.create(#Year 2024, #August, #Day 8);//contract frozen until this date
   let dispensation : Components.Components = {
-    year = 2024;
+    year = 2025;
     month = 8;
     day = 8;
     hour = 0;
@@ -671,8 +671,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             }
           );
 
-          if(balance < icpMinimum+icpFee and args.amount < icpMinimum+icpFee) {
-            D.trap("Minimum mint amount is 1 ICP + fee");
+          if(balance < icpMinimum and args.amount < icpMinimum) {
+            D.trap("Minimum mint amount is 1 ICP");
           };
           
           let result = try{
@@ -719,8 +719,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             }
           );
 
-          if(balance < ethMinimum+ethFee and args.amount < ethMinimum+ethFee) {
-            D.trap("Minimum mint amount is 0.1 ETH + fee");
+          if(balance < ethMinimum and args.amount < ethMinimum) {
+            D.trap("Minimum mint amount is 0.1 ETH");
           };
 
           let result = try{
@@ -767,8 +767,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             }
           );
 
-          if(balance < btcMinimum+btcFee and args.amount < btcMinimum+btcFee) {
-            D.trap("Minimum mint amount is 0.01 BTC + fee");
+          if(balance < btcMinimum and args.amount < btcMinimum) {
+            D.trap("Minimum mint amount is 0.01 BTC");
           };
 
           let result = try{
