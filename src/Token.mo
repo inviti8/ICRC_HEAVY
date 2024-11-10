@@ -481,6 +481,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_principals = Map.new<Principal, Nat>(phash);
   let generator_accounts = Map.new<Nat, ?[Nat8]>(nhash);
   let generator_marks = Map.new<Principal, ?Text>(phash);
+  let mark_logos = Map.new<Text, Text>(thash);
   stable var generatorMintedBalance : Nat = 0;
 
 
@@ -997,6 +998,22 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public query func getGeneratorEpoch(args : ICRC1.Account) : async ?Nat{
     return Map.get(generator_principals, phash, args.owner);
+  };
+
+  public query func getMarkLogo(mark : Text) : async ?Text{
+    return Map.get(mark_logos, thash, mark);
+  };
+
+  public shared ({ caller }) func setMarkLogo(mark : Text, logo : Text) : async Bool{
+    switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
+      case (null) {
+        return false;
+      };
+      case (?val) {
+        Map.set(mark_logos, thash, mark, logo);
+        return true;
+      };
+    };
   };
 
   public query ({ caller }) func isGenerator()  : async Bool{
