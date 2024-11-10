@@ -1004,15 +1004,19 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     return Map.get(mark_logos, thash, mark);
   };
 
-  public shared ({ caller }) func setMarkLogo(mark : Text, logo : Text) : async Bool{
-    switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
-      case (null) {
-        return false;
+  public shared ({ caller }) func setMarkLogo(mark : Text, logoUrl : Text) : async Bool{
+    if(Text.startsWith(logoUrl, #text "https://" ) and Text.endsWith(logoUrl, #text ".png")){
+      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
+        case (null) {
+          D.trap("Unauthorized.");
+        };
+        case (?val) {
+          Map.set(mark_logos, thash, mark, logoUrl);
+          return true;
+        };
       };
-      case (?val) {
-        Map.set(mark_logos, thash, mark, logo);
-        return true;
-      };
+    }else{
+      D.trap("Logo url isn't the correct format.");
     };
   };
 
