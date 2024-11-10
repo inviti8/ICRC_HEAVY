@@ -476,10 +476,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let ephemeralRewardInterval = 88;//TEST
   let ephemeralAllocationSet = 10;
 
-  let { nhash; phash } = Map;
+  let { nhash; phash; thash; } = Map;
   let generators = Map.new<Nat, Text>(nhash);
   let generator_principals = Map.new<Principal, Nat>(phash);
   let generator_accounts = Map.new<Nat, ?[Nat8]>(nhash);
+  let generator_marks = Map.new<Principal, ?Text>(phash);
   stable var generatorMintedBalance : Nat = 0;
 
 
@@ -545,7 +546,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   private func mintEphemeralTokens(acct : Nat) : async () {
     let args :  ?Types.MintEphemeral = await ephemeralMint(acct);
-    var memo : Blob = Text.encodeUtf8("EPHEMERAL-->ORO");
+    var memo : Blob = Text.encodeUtf8("EPHEMERAL");
     Debug.print("EPHEMERAL MINT!");
     switch(args){
       case(null){
@@ -656,7 +657,23 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
-      var memo : Blob = Text.encodeUtf8("ICP-->ORO");
+      var memo : Blob = Text.encodeUtf8("UNMARKED");
+      var marked : Bool = false;
+
+      switch (args.mintMark){//Minter can add custom mark to coins
+        case(null)  {};
+        case(?val)  {
+          switch (Map.get(generator_marks, phash, caller)){
+            case (null){
+              memo := Text.encodeUtf8(val);
+              marked := true;
+            };
+            case(?mark) {
+              D.trap("Coins are already minted with this mark, use another.");
+            };
+          };
+        };
+      };
 
       switch (args.coin) {
         case (#ICP){
@@ -709,7 +726,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         case (#ETH){
 
           let ETHLedger : CkETHTypes.Service = actor(CK_ETH_LEDGER);
-          memo := Text.encodeUtf8("ckETH-->ORO");
 
           // check ICP balance of the callers dedicated account
           let balance = await ETHLedger.icrc1_balance_of(
@@ -757,7 +773,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         case (#BTC){
 
           let BTCLedger : CkBTCTypes.Service = actor(CK_BTC_LEDGER);
-          memo := Text.encodeUtf8("ckBTC-->ORO");
 
           // check ICP balance of the callers dedicated account
           let balance = await BTCLedger.icrc1_balance_of(
@@ -811,6 +826,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           Map.set(generators, nhash, mintedCount, Principal.toText(caller));//Add minter to reconstruct
           Map.set(generator_principals, phash, caller, mintedCount);//Add minter to list for ephemeral minting
           Map.set(generator_accounts, nhash, mintedCount, args.source_subaccount);//Add minter to list for ephemeral minting
+          if(marked){
+            Map.set(generator_marks, phash, caller, Text.decodeUtf8(memo));//if coin is marked add memo to map
+          };
           block;
         };
         case(#Err(err)){
@@ -979,6 +997,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public query func getGeneratorEpoch(args : ICRC1.Account) : async ?Nat{
     return Map.get(generator_principals, phash, args.owner);
+  };
+
+  public query ({ caller }) func isGenerator()  : async Bool{
+    switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
+      case (null) {
+        return false;
+      };
+      case (?val) {
+        return true;
+      };
+    };
   };
 
   public query func icpMinimumTokensRequired() : async Nat{
