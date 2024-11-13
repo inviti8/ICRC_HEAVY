@@ -403,16 +403,16 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
   };
 
-  public shared ({ caller }) func mint(args : ICRC1.Mint) : async ICRC1.TransferResult {
-      if(caller != owner){ D.trap("Unauthorized")};
+  // public shared ({ caller }) func mint(args : ICRC1.Mint) : async ICRC1.TransferResult {
+  //     if(caller != owner){ D.trap("Unauthorized")};
 
-      switch( await* icrc1().mint_tokens(caller, args)){
-        case(#trappable(val)) val;
-        case(#awaited(val)) val;
-        case(#err(#trappable(err))) D.trap(err);
-        case(#err(#awaited(err))) D.trap(err);
-      };
-  };
+  //     switch( await* icrc1().mint_tokens(caller, args)){
+  //       case(#trappable(val)) val;
+  //       case(#awaited(val)) val;
+  //       case(#err(#trappable(err))) D.trap(err);
+  //       case(#err(#awaited(err))) D.trap(err);
+  //     };
+  // };
 
   //ORO SPECIFIC CODE
   private func time64() : Nat64 {
@@ -484,6 +484,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_accounts = Map.new<Nat, ?[Nat8]>(nhash);
   let generator_marks = Map.new<Principal, ?Text>(phash);
   let mark_logos = Map.new<Text, Text>(thash);
+  let marked_mint_balances = Map.new<Text, Nat>(thash);
+  let marks = Buffer.Buffer<Nat>(1024);
   stable var generatorMintedBalance : Nat = 0;
 
 
@@ -574,7 +576,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                 }
               };
             };
-          amount = arg.amount;           // The number of tokens to mint.
+          amount = arg.amount;// The number of tokens to mint.
           created_at_time = ?time64();
           memo = ?(memo);
         });
@@ -829,6 +831,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           Map.set(generators, nhash, mintedCount, Principal.toText(caller));//Add minter to reconstruct
           Map.set(generator_principals, phash, caller, mintedCount);//Add minter to list for ephemeral minting
           Map.set(generator_accounts, nhash, mintedCount, args.source_subaccount);//Add minter to list for ephemeral minting
+          switch(Text.decodeUtf8(memo)){
+            case(null){};
+            case(?mem){
+              Map.set(marked_mint_balances, thash, mem, args.amount);
+            };
+          };
           if(marked){
             Map.set(generator_marks, phash, caller, Text.decodeUtf8(memo));//if coin is marked add memo to map
           };
@@ -1091,6 +1099,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     return Float.fromInt(balance / 1_0000_0000_0000_0000)
   };
 
+  public shared func mintedBalanceByMark(args : ICRC1.Account, mark : Text ) : async Float{
+    switch (Map.get(marked_mint_balances, thash, mark)) {
+        case (null) {
+          D.trap("Mark doesn't exist.");
+        };
+        case (?balance) {
+          return Float.fromInt(balance / 1_0000_0000_0000_0000);
+        };
+      };
+  };
+
   public shared func totalEphemeralMintedBalance() : async Float{
     return Float.fromInt(ephemeralMintedBalance)
   };
@@ -1112,9 +1131,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
   };
 
-   public query ({ caller }) func icrc2_allowance(args: ICRC2.AllowanceArgs) : async ICRC2.Allowance {
+  public query ({ caller }) func icrc2_allowance(args: ICRC2.AllowanceArgs) : async ICRC2.Allowance {
       return icrc2().allowance(args.spender, args.account, false);
-    };
+  };
 
   public shared ({ caller }) func icrc2_approve(args : ICRC2.ApproveArgs) : async ICRC2.ApproveResponse {
       switch(await*  icrc2().approve_transfers(caller, args, false, null)){
