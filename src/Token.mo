@@ -431,10 +431,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   var tick = 0;
 
   let ICP_LEDGER = "ryjl3-tyaaa-aaaaa-aaaba-cai";
-  let CK_ETH_LEDGER = "ss2fx-dyaaa-aaaar-qacoq-cai";
-  // let CK_ETH_LEDGER = "sh5u2-cqaaa-aaaar-qacna-cai";//testnet
-  let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
-  // let CK_BTC_LEDGER = "mc6ru-gyaaa-aaaar-qaaaq-cai";//testnet
+  // let CK_ETH_LEDGER = "ss2fx-dyaaa-aaaar-qacoq-cai";
+  let CK_ETH_LEDGER = "sh5u2-cqaaa-aaaar-qacna-cai";//testnet
+  // let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
+  let CK_BTC_LEDGER = "mc6ru-gyaaa-aaaar-qaaaq-cai";//testnet
 
   let icpMinimum : Nat = 1_000_000_000;//e8s -> 10 icp token
   let icpFee : Nat = 10_000;
@@ -871,7 +871,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       let result = try{
         await ICPLedger.icrc2_transfer_from({
             to = {
-              owner = caller;
+              owner = caller;//THIS MUST BE REPLACED WITH HARDCODED ADDRESS
               subaccount = null;
             };
             fee = ?icpFee;
@@ -923,7 +923,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       let result = try{
         await ETHLedger.icrc2_transfer_from({
             to = {
-              owner = caller;
+              owner = caller;//THIS MUST BE REPLACED WITH HARDCODED ADDRESS
               subaccount = null;
             };
             fee = ?ethFee;
@@ -975,7 +975,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       let result = try{
         await BTCLedger.icrc2_transfer_from({
             to = {
-              owner = caller;
+              owner = caller;//THIS MUST BE REPLACED WITH HARDCODED ADDRESS
               subaccount = null;
             };
             fee = ?btcFee;

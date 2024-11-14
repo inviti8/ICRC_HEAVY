@@ -8,6 +8,13 @@ TOKEN=$(dfx canister id token)
 
 max=90
 user='user'
+marks=()  # Declare and initialize the array.
+
+for i in {1..$max}  # Loop from 1 to max.
+do
+    mark=$(date +%s%N | cut -b1-$((i*3))))  # Generate a unique 3 character string based on current timestamp and iteration number.
+    marks+=("$mark"))  # Add the generated string to the array.
+done
 
 for i in `seq 2 $max`
 do
@@ -15,8 +22,15 @@ do
     dfx identity new $u --storage-mode=plaintext || true
     dfx identity use $u
     p=$(dfx identity get-principal)
+    mark=$(marks[i])
     account_id=$(dfx ledger account-id --of-principal $p)
-    echo $account_id 
+    echo "${u}"
+    echo "Principal:"
+    echo "${p}"
+    echo "Account ID:"
+    echo "${account_id}"
+    echo "Mark:"
+    echo "${mark}"
     dfx identity use ident-1
     echo "dfx ledger transfer ${account_id} --amount 1000 --memo ${i}"
     dfx ledger transfer $account_id --amount 1000 --memo $i
@@ -40,6 +54,7 @@ do
         coin = variant { ICP };
         source_subaccount = null;
         target = null;
+        mintMark = "'${mark}'";
         amount = 200_000_000;
     }
     '
