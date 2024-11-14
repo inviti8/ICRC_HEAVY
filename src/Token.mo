@@ -485,7 +485,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_marks = Map.new<Principal, ?Text>(phash);
   let mark_logos = Map.new<Text, Text>(thash);
   let marked_mint_balances = Map.new<Text, Nat>(thash);
-  let marks = Buffer.Buffer<Nat>(1024);
   stable var generatorMintedBalance : Nat = 0;
 
 
@@ -851,6 +850,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   public shared ({ caller }) func withdrawICP(amount : Nat) : async ICPTypes.Result_2 {
+    
+      if(caller != owner){ D.trap("Unauthorized")};
 
       let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
       var memo : Blob = Text.encodeUtf8("ICP-OUT");
@@ -902,6 +903,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public shared ({ caller }) func withdrawCkETH(amount : Nat) : async CkETHTypes.Result_2 {
 
+      if(caller != owner){ D.trap("Unauthorized")};
+
       let ETHLedger : CkETHTypes.Service = actor(CK_ETH_LEDGER);
       var memo : Blob = Text.encodeUtf8("ckETH-OUT");
 
@@ -951,6 +954,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   public shared ({ caller }) func withdrawCkBTC(amount : Nat) : async CkBTCTypes.Result_2 {
+
+      if(caller != owner){ D.trap("Unauthorized")};
 
       let BTCLedger : CkBTCTypes.Service = actor(CK_BTC_LEDGER);
       var memo : Blob = Text.encodeUtf8("ckBTC-OUT");
