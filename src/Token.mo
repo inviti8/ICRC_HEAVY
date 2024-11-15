@@ -1052,7 +1052,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   public query func getIcpExchangeRate() : async Float{
-    return Float.fromInt(icpExchangeRate / 100_000_000);
+    return Float.fromInt(icpExchangeRate / 10_000_000_000_000_000);
   };
 
   public query func icpTreasuryTotalCollected() : async Float{
@@ -1064,7 +1064,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   public query func getckEthExchangeRate() : async Float{
-    return Float.fromInt(ckEthExchangeRate / 100_000_000);
+    return Float.fromInt(ckEthExchangeRate / 10_000_000_000_000_000);
   };
 
   public query func ethTreasuryTotalCollected() : async Float{
@@ -1076,7 +1076,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   public query func getckBtcExchangeRate() : async Float{
-    return Float.fromInt(ckBtcExchangeRate / 100_000_000);
+    return Float.fromInt(ckBtcExchangeRate / 10_000_000_000_000_000);
   };
 
   public query func btcTreasuryTotalCollected() : async Float{
