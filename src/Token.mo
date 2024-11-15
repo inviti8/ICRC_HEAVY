@@ -15,6 +15,7 @@ import Types "Types";
 import Blob "mo:base/Blob";
 import Error "mo:base/Error";
 import Int "mo:base/Int";
+import Int64 "mo:base/Int64";
 import Nat64 "mo:base/Nat64";
 import Text "mo:base/Text";
 import Option "mo:base/Option";
@@ -1101,7 +1102,13 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           owner = args.owner;
           subaccount = args.subaccount;
       }
-    ); 
+    );
+    let n = Nat64.fromNat(balance / 10_000_000_000_000_000);
+    return Float.fromInt64(Int64.fromNat64(n))
+  };
+
+  public shared func total_supply() : async Float{
+    let balance = await icrc1_total_supply(); 
     return Float.fromInt(balance / 10_000_000_000_000_000)
   };
 
