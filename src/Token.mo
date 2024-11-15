@@ -419,7 +419,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     Nat64.fromNat(Int.abs(Time.now()));
   };
 
-  stable var icpExchangeRate : Nat = 8_0000_0000_0000_0000;//8 oro for 1 ICP
+  stable var icpExchangeRate : Nat = 80_000_000_000_000_000;//8 oro for 1 ICP
   //stable var icpInflation : Nat = 888_8888_8888;//subtracted with each new mint
   stable var icpInflation : Nat = 98_8888_8888_8888;//TEST
   stable var ckEthExchangeRate : Nat = icpExchangeRate*8;//64 oro for 1 ckETH
@@ -1032,11 +1032,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
     }else{
       D.trap("Logo url isn't the correct format.");
+      return false;
     };
   };
 
-  public query ({ caller }) func isGenerator()  : async Bool{
-    switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
+  public query func isGenerator(args : ICRC1.Account)  : async Bool{
+    switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {
       case (null) {
         return false;
       };
@@ -1046,40 +1047,40 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
-  public query func icpMinimumTokensRequired() : async Nat{
-    return icpMinimum;
+  public query func icpMinimumTokensRequired() : async Float{
+    return Float.fromInt(icpMinimum / 100_000_000);
   };
 
-  public query func getIcpExchangeRate() : async Nat{
-    return icpExchangeRate;
+  public query func getIcpExchangeRate() : async Float{
+    return Float.fromInt(icpExchangeRate / 100_000_000);
   };
 
-  public query func icpTreasuryTotalCollected() : async Nat{
-    return icpTreasury;
+  public query func icpTreasuryTotalCollected() : async Float{
+    return Float.fromInt(icpTreasury / 100_000_000);
   };
 
-  public query func ethMinimumTokensRequired() : async Nat{
-    return ethMinimum;
+  public query func ethMinimumTokensRequired() : async Float{
+    return Float.fromInt(ethMinimum / 100_000_000);
   };
 
-  public query func getckEthExchangeRate() : async Nat{
-    return ckEthExchangeRate;
+  public query func getckEthExchangeRate() : async Float{
+    return Float.fromInt(ckEthExchangeRate / 100_000_000);
   };
 
-  public query func ethTreasuryTotalCollected() : async Nat{
-    return ethTreasury;
+  public query func ethTreasuryTotalCollected() : async Float{
+    return Float.fromInt(ethTreasury / 100_000_000);
   };
 
-  public query func btcMinimumTokensRequired() : async Nat{
-    return btcMinimum;
+  public query func btcMinimumTokensRequired() : async Float{
+    return Float.fromInt(btcMinimum / 100_000_000);
   };
 
-  public query func getckBtcExchangeRate() : async Nat{
-    return ckBtcExchangeRate;
+  public query func getckBtcExchangeRate() : async Float{
+    return Float.fromInt(ckBtcExchangeRate / 100_000_000);
   };
 
-  public query func btcTreasuryTotalCollected() : async Nat{
-    return btcTreasury;
+  public query func btcTreasuryTotalCollected() : async Float{
+    return Float.fromInt(btcTreasury / 100_000_000);
   };
 
   public query func getNumberOfMints() : async Nat{
@@ -1101,7 +1102,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           subaccount = args.subaccount;
       }
     ); 
-    return Float.fromInt(balance / 1_0000_0000_0000_0000)
+    return Float.fromInt(balance / 10_000_000_000_000_000)
   };
 
   public shared func mintedBalanceByMark(args : ICRC1.Account, mark : Text ) : async Float{
@@ -1110,7 +1111,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           D.trap("Mark doesn't exist.");
         };
         case (?balance) {
-          return Float.fromInt(balance / 1_0000_0000_0000_0000);
+          return Float.fromInt(balance / 10_000_000_000_000_000);
         };
       };
   };
