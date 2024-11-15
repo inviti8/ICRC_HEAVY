@@ -10,10 +10,10 @@ max=90
 user='user'
 marks=()  # Declare and initialize the array.
 
-for i in {1..$max}  # Loop from 1 to max.
+for i in `seq 2 $max`  # Loop from 1 to max.
 do
-    mark=$(date +%s%N | cut -b1-$((i*3))))  # Generate a unique 3 character string based on current timestamp and iteration number.
-    marks+=("$mark"))  # Add the generated string to the array.
+    mark=$(date +%s%N | cut -b1-$((i*3)))  # Generate a unique mark
+    marks+=("$mark")  # Add the generated string to the array.
 done
 
 for i in `seq 2 $max`
@@ -22,7 +22,7 @@ do
     dfx identity new $u --storage-mode=plaintext || true
     dfx identity use $u
     p=$(dfx identity get-principal)
-    mark=$(marks[i])
+    mark="${marks[i]}"
     account_id=$(dfx ledger account-id --of-principal $p)
     echo "${u}"
     echo "Principal:"
@@ -54,7 +54,7 @@ do
         coin = variant { ICP };
         source_subaccount = null;
         target = null;
-        mintMark = "'${mark}'";
+        mintMark = opt "'${mark}'";
         amount = 200_000_000;
     }
     '

@@ -1019,9 +1019,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     return Map.get(mark_logos, thash, mark);
   };
 
-  public shared ({ caller }) func setMarkLogo(mark : Text, logoUrl : Text) : async Bool{
+  public shared func setMarkLogo(args : ICRC1.Account, mark : Text, logoUrl : Text) : async Bool{
     if(Text.startsWith(logoUrl, #text "https://" ) and Text.endsWith(logoUrl, #text ".png")){
-      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
+      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {
         case (null) {
           D.trap("Unauthorized.");
         };
