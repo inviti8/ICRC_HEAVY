@@ -606,7 +606,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
     };
     
-    var mintingAmount : Nat = exchangeRate * args.amount;
+    var mintingAmount : Nat = exchangeRate * (args.amount / 100_000_000);
     generatorMintedBalance := generatorMintedBalance + mintingAmount;
     mintedCount := mintedCount + 1;
 
