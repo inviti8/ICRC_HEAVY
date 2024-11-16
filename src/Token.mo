@@ -15,12 +15,14 @@ import Types "Types";
 import Blob "mo:base/Blob";
 import Error "mo:base/Error";
 import Int "mo:base/Int";
-import Int64 "mo:base/Int64";
+import Int32 "mo:base/Int32";
 import Nat64 "mo:base/Nat64";
 import Text "mo:base/Text";
+import Char "mo:base/Char";
 import Option "mo:base/Option";
 import Nat "mo:base/Nat";
 import Nat8 "mo:base/Nat8";
+import Nat32 "mo:base/Nat32";
 import Array "mo:base/Array";
 import Debug "mo:base/Debug";
 import Float "mo:base/Float";
@@ -486,6 +488,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_marks = Map.new<Principal, ?Text>(phash);
   let mark_logos = Map.new<Text, Text>(thash);
   let marked_mint_balances = Map.new<Text, Nat>(thash);
+  let requested_allotments = Map.new<Text, Text>(thash);
+
   stable var generatorMintedBalance : Nat = 0;
 
 
@@ -1020,6 +1024,252 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     return Map.get(mark_logos, thash, mark);
   };
 
+  public shared func deleteTimeAllotment( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async Bool{
+    if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of alottment
+
+      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be the owner of the mark
+        case (null) {
+          D.trap("Unauthorized.");
+          return false;
+        };
+        case (?val) {
+
+          let delimit = mark # ".";
+          let key = Text.concat(delimit, targetAcct);
+
+          switch (Map.get(requested_allotments, thash, key)) {//allotment must not exist
+            case (null) {
+              D.trap("Allotment already exists.");
+              return false;
+            };
+            case (?val) {
+              Map.delete(requested_allotments, thash, key);
+              return true;
+            };
+          };
+        };
+      };
+
+    }else{
+
+      return false;
+
+    };
+  };
+
+  public shared func createTimeAllotment( args : ICRC1.Account, mark : Text, targetAcct : Text, yr : Nat, m : Nat, d : Nat, hr : Nat, min : Nat, nan : Nat ) : async Bool{
+    if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of alottment
+
+      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be the owner of the mark
+        case (null) {
+          D.trap("Unauthorized.");
+          return false;
+        };
+        case (?val) {
+
+          let delimit = mark # ".";
+          let key = Text.concat(delimit, targetAcct);
+          let val = Nat.toText(yr) # "|" # Nat.toText(m) # "|" # Nat.toText(d) # "|" # Nat.toText(hr) # "|" # Nat.toText(min) # "|" # Nat.toText(nan);
+
+          switch (Map.get(requested_allotments, thash, key)) {//allotment must not exist
+            case (null) {
+              Map.set(requested_allotments, thash, key, val);
+              return true;
+            };
+            case (?val) {
+              D.trap("Allotment already exists.");
+              return false;
+            };
+          };
+        };
+      };
+
+    }else{
+
+      return false;
+      
+    };
+  };
+
+  public query func checkTimeAllotment( args : ICRC1.Account, mark : Text ) : async Bool{
+    let delimit = mark # ".";
+    let key = Text.concat(delimit, Principal.toText(args.owner));
+
+    switch (Map.get(requested_allotments, thash, key)) {
+      case (null) {
+        D.trap("Mark doesn't exist.");
+        return false;
+      };
+      case (?val) {
+        
+        let arr = Iter.toArray(Text.split(val, #char '|'));
+        let y = Nat.fromText(arr[0]);
+        var yr : Int32 = 0;
+        let m = Nat.fromText(arr[1]);
+        var mnh : Nat = 0;
+        let d = Nat.fromText(arr[2]);
+        var dy : Nat = 0;
+        let h  = Nat.fromText(arr[3]);
+        var hr : Nat = 0;
+        let mn = Nat.fromText(arr[4]);
+        var min : Nat = 0;
+        let n = Nat.fromText(arr[5]);
+        var nan : Nat = 0;
+
+        switch (y){
+          case (null) {};
+          case (?x) {
+            yr := Int32.fromNat32(Nat32.fromNat(x));
+           };
+        };
+
+        switch (m){
+          case (null) {};
+          case (?x) {
+            mnh := x;
+           };
+        };
+
+        switch (d){
+          case (null) {};
+          case (?x) {
+            dy := x;
+           };
+        };
+
+        switch (h){
+          case (null) {};
+          case (?x) {
+            hr := x;
+           };
+        };
+
+        switch (mn){
+          case (null) {};
+          case (?x) {
+            min := x;
+           };
+        };
+
+        switch (n){
+          case (null) {};
+          case (?x) {
+            nan := x;
+           };
+        };
+
+        if(yr!=0){
+          
+          let time : Components.Components = {
+            year = Int32.toInt(yr);
+            month = mnh;
+            day = dy;
+            hour = hr;
+            minute = min;
+            nanosecond = nan;
+          };
+
+          return Date.isFutureDate(time);
+
+        }else{
+
+          return false;
+          
+        };
+        
+      };
+    };
+
+  };
+
+  public query func showTimeAllotment( args : ICRC1.Account, mark : Text ) : async Text{
+    let delimit = mark # ".";
+    let key = Text.concat(delimit, Principal.toText(args.owner));
+
+    switch (Map.get(requested_allotments, thash, key)) {
+      case (null) {
+        return "Mark doesn't exist.";
+      };
+      case (?val) {
+        
+        let arr = Iter.toArray(Text.split(val, #char '|'));
+        let y = Nat.fromText(arr[0]);
+        var yr : Int32 = 0;
+        let m = Nat.fromText(arr[1]);
+        var mnh : Nat = 0;
+        let d = Nat.fromText(arr[2]);
+        var dy : Nat = 0;
+        let h  = Nat.fromText(arr[3]);
+        var hr : Nat = 0;
+        let mn = Nat.fromText(arr[4]);
+        var min : Nat = 0;
+        let n = Nat.fromText(arr[5]);
+        var nan : Nat = 0;
+
+        switch (y){
+          case (null) {};
+          case (?x) {
+            yr := Int32.fromNat32(Nat32.fromNat(x));
+           };
+        };
+
+        switch (m){
+          case (null) {};
+          case (?x) {
+            mnh := x;
+           };
+        };
+
+        switch (d){
+          case (null) {};
+          case (?x) {
+            dy := x;
+           };
+        };
+
+        switch (h){
+          case (null) {};
+          case (?x) {
+            hr := x;
+           };
+        };
+
+        switch (mn){
+          case (null) {};
+          case (?x) {
+            min := x;
+           };
+        };
+
+        switch (n){
+          case (null) {};
+          case (?x) {
+            nan := x;
+           };
+        };
+
+        if(yr!=0){
+          
+          let time : Components.Components = {
+            year = Int32.toInt(yr);
+            month = mnh;
+            day = dy;
+            hour = hr;
+            minute = min;
+            nanosecond = nan;
+          };
+
+          return Date.show(time);
+
+        }else{
+          return "Invalid Date.";
+        };
+
+      };
+    };
+
+  };
+
   public shared func setMarkLogo(args : ICRC1.Account, mark : Text, logoUrl : Text) : async Bool{
     if(Text.startsWith(logoUrl, #text "https://" ) and Text.endsWith(logoUrl, #text ".png")){
       switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {
@@ -1103,8 +1353,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           subaccount = args.subaccount;
       }
     );
-    let n = Nat64.fromNat(balance / 10_000_000_000_000_000);
-    return Float.fromInt64(Int64.fromNat64(n))
+    return Float.fromInt(balance / 10_000_000_000_000_000)
   };
 
   public shared func total_supply() : async Float{
@@ -1114,13 +1363,13 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public shared func mintedBalanceByMark(args : ICRC1.Account, mark : Text ) : async Float{
     switch (Map.get(marked_mint_balances, thash, mark)) {
-        case (null) {
-          D.trap("Mark doesn't exist.");
-        };
-        case (?balance) {
-          return Float.fromInt(balance / 10_000_000_000_000_000);
-        };
+      case (null) {
+        D.trap("Mark doesn't exist.");
       };
+      case (?balance) {
+        return Float.fromInt(balance / 10_000_000_000_000_000);
+      };
+    };
   };
 
   public shared func totalEphemeralMintedBalance() : async Float{
