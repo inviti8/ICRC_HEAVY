@@ -33,6 +33,8 @@ import CkETHTypes "CkETHTypes";
 import CkBTCTypes "CkBTCTypes";
 import Date "Date";
 import Components "mo:datetime/Components";
+import Source "mo:uuid/async/SourceV4";
+import UUID "mo:uuid/UUID";
 
 shared ({ caller = _owner }) actor class Token  (args: ?{
     icrc1 : ?ICRC1.InitArgs;
@@ -488,6 +490,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_marks = Map.new<Principal, ?Text>(phash);
   let mark_logos = Map.new<Text, Text>(thash);
   let marked_mint_balances = Map.new<Text, Nat>(thash);
+  let ephemeral_drop_events = Map.new<Text, Text>(thash);
+  let ephemeral_drop_event_urls = Map.new<Text, Text>(thash);
   let ephemeral_drops = Map.new<Text, Text>(thash);
 
   stable var generatorMintedBalance : Nat = 0;
@@ -1024,9 +1028,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     return Map.get(mark_logos, thash, mark);
   };
 
-  private func dateType( args : ICRC1.Account, mark : Text ) : ? Types.DateType{
-    let delimit = mark # ".";
-    let key = Text.concat(delimit, Principal.toText(args.owner));
+  private func _ephemeralDropKey( acct : Text, mark : Text ) : Text{
+    let delimit = mark # "|";
+    return Text.concat(delimit, acct);
+  };
+
+  private func _isPngUrl(url : Text) : Bool {
+    return (Text.startsWith(url, #text "https://" ) and Text.endsWith(url, #text ".png"))
+  };
+
+  private func _dateType( acct : Text, mark : Text ) : ? Types.DateType{
+    let key = _ephemeralDropKey(acct, mark);
 
     switch (Map.get(ephemeral_drops, thash, key)) {
       case (null) {
@@ -1077,6 +1089,73 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   };
 
+  private func _deleteDropEvent(mark : Text) : Bool {
+    switch(Map.get(ephemeral_drop_events, thash, mark)){//event must exist
+      case(null){
+        return false;
+      };
+      case(?evt){
+        Map.delete(ephemeral_drop_events, thash, mark);
+        Map.delete(ephemeral_drop_event_urls, thash, evt);
+        return true;
+      };
+    };
+  };
+
+  public shared func deleteEphemeralDropEvent( args : ICRC1.Account, mark : Text) : async Bool{
+    switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be a generator
+      case (null) {
+          return false;
+      };
+      case (?val) {
+
+        switch (Map.get(generator_marks, phash, args.owner)){//must have a mark
+          case (null){
+            return false;
+          };
+          case(?m) {
+            return _deleteDropEvent(mark);
+          };
+        };
+      };
+    };
+  };
+
+  public shared func createEphemeralDropEvent( args : ICRC1.Account, mark : Text, imgUrl : Text) : async Bool{
+    switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be a generator
+      case (null) {
+          return false;
+      };
+      case (?val) {
+
+        switch (Map.get(generator_marks, phash, args.owner)){//must have a mark
+          case (null){
+            return false;
+          };
+          case(?m) {
+            switch(Map.get(ephemeral_drop_events, thash, mark)){//event must not exist
+              case(null){
+                if(_isPngUrl(imgUrl) and m==mark){
+                  let g = Source.Source();
+                  let uuid = UUID.toText(await g.new());
+                  Map.set(ephemeral_drop_events, thash, mark, uuid);
+                  Map.set(ephemeral_drop_event_urls, thash, uuid, imgUrl);
+                  return true;
+                }else{
+                  return false;
+                };
+              };
+              case(?evt){
+                return false;
+              }
+            };
+
+          };
+        };
+      };
+    };
+  };
+
   public shared func deleteEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async Bool{
     if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of drop
 
@@ -1104,9 +1183,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
 
     }else{
-
       return false;
-
     };
   };
 
@@ -1120,8 +1197,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
         case (?val) {
 
-          let delimit = mark # ".";
-          let key = Text.concat(delimit, targetAcct);
+          let key = _ephemeralDropKey(targetAcct, mark);
           let val = Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond);
 
           switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
@@ -1138,15 +1214,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
 
     }else{
-
       return false;
-
     };
   };
 
   public query func ephemeralDropReady( args : ICRC1.Account, mark : Text ) : async Bool{
-    let delimit = mark # ".";
-    let key = Text.concat(delimit, Principal.toText(args.owner));
+    let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
 
     switch (Map.get(ephemeral_drops, thash, key)) {
       case (null) {
@@ -1154,52 +1227,48 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         return false;
       };
       case (?val) {
-        switch(dateType( args, mark)) {
+        switch(_dateType( Principal.toText(args.owner), mark)) {
           case (null)  {
             return false;
            };
           case (?date)  {
             return Date.isFutureDate(date);
           };
-
         };
-        
       };
     };
 
   };
 
   public query func showEphemeralDrop( args : ICRC1.Account, mark : Text ) : async Text{
-    let delimit = mark # ".";
-    let key = Text.concat(delimit, Principal.toText(args.owner));
+    let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
 
     switch (Map.get(ephemeral_drops, thash, key)) {
       case (null) {
         return "Mark doesn't exist.";
       };
       case (?val) {
-        switch(dateType( args, mark)) {
+        switch(_dateType( Principal.toText(args.owner), mark)) {
           case (null)  {
             return "Something went wrong.";
            };
           case (?date)  {
             return Date.show(date);
           };
-
         };
       };
     };
 
   };
 
-  public shared func setMarkLogo(args : ICRC1.Account, mark : Text, logoUrl : Text) : async Bool{
-    if(Text.startsWith(logoUrl, #text "https://" ) and Text.endsWith(logoUrl, #text ".png")){
+  public shared func setMarkLogo(args : ICRC1.Account, markType : Types.MarkType) : async Bool{
+    if(_isPngUrl(markType.logoUrl)){
       switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {
         case (null) {
           D.trap("Unauthorized.");
         };
         case (?val) {
-          Map.set(mark_logos, thash, mark, logoUrl);
+          Map.set(mark_logos, thash, markType.mark, markType.logoUrl);
           return true;
         };
       };
