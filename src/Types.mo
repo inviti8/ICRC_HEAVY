@@ -10,4 +10,12 @@ module {
     target: ?{ owner : Principal; subaccount : ?[Nat8] };
     amount : Nat;
   };
+  public type DateType = {
+    year : Nat;
+    month : Nat;
+    day : Nat;
+    hour : Nat;
+    minute : Nat;
+    nanosecond : Nat;
+  };
 }

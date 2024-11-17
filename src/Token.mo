@@ -488,7 +488,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_marks = Map.new<Principal, ?Text>(phash);
   let mark_logos = Map.new<Text, Text>(thash);
   let marked_mint_balances = Map.new<Text, Nat>(thash);
-  let requested_allotments = Map.new<Text, Text>(thash);
+  let ephemeral_drops = Map.new<Text, Text>(thash);
 
   stable var generatorMintedBalance : Nat = 0;
 
@@ -1024,157 +1024,144 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     return Map.get(mark_logos, thash, mark);
   };
 
-  public shared func deleteTimeAllotment( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async Bool{
-    if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of alottment
-
-      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be the owner of the mark
-        case (null) {
-          D.trap("Unauthorized.");
-          return false;
-        };
-        case (?val) {
-
-          let delimit = mark # ".";
-          let key = Text.concat(delimit, targetAcct);
-
-          switch (Map.get(requested_allotments, thash, key)) {//allotment must not exist
-            case (null) {
-              D.trap("Allotment already exists.");
-              return false;
-            };
-            case (?val) {
-              Map.delete(requested_allotments, thash, key);
-              return true;
-            };
-          };
-        };
-      };
-
-    }else{
-
-      return false;
-
-    };
-  };
-
-  public shared func createTimeAllotment( args : ICRC1.Account, mark : Text, targetAcct : Text, yr : Nat, m : Nat, d : Nat, hr : Nat, min : Nat, nan : Nat ) : async Bool{
-    if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of alottment
-
-      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be the owner of the mark
-        case (null) {
-          D.trap("Unauthorized.");
-          return false;
-        };
-        case (?val) {
-
-          let delimit = mark # ".";
-          let key = Text.concat(delimit, targetAcct);
-          let val = Nat.toText(yr) # "|" # Nat.toText(m) # "|" # Nat.toText(d) # "|" # Nat.toText(hr) # "|" # Nat.toText(min) # "|" # Nat.toText(nan);
-
-          switch (Map.get(requested_allotments, thash, key)) {//allotment must not exist
-            case (null) {
-              Map.set(requested_allotments, thash, key, val);
-              return true;
-            };
-            case (?val) {
-              D.trap("Allotment already exists.");
-              return false;
-            };
-          };
-        };
-      };
-
-    }else{
-
-      return false;
-      
-    };
-  };
-
-  public query func checkTimeAllotment( args : ICRC1.Account, mark : Text ) : async Bool{
+  private func dateType( args : ICRC1.Account, mark : Text ) : ? Types.DateType{
     let delimit = mark # ".";
     let key = Text.concat(delimit, Principal.toText(args.owner));
 
-    switch (Map.get(requested_allotments, thash, key)) {
+    switch (Map.get(ephemeral_drops, thash, key)) {
+      case (null) {
+        return null;
+      };
+      case (?val) {
+        let arr = Iter.toArray(Text.split(val, #char '|'));
+        switch(Nat.fromText(arr[0])){
+          case(null){return null};
+          case(?year){
+            switch(Nat.fromText(arr[1])){
+              case(null){return null};
+              case(?month){
+                switch(Nat.fromText(arr[2])){
+                  case(null){return null};
+                  case(?day){
+                    switch(Nat.fromText(arr[3])){
+                      case(null){return null};
+                      case(?hour){
+                        switch(Nat.fromText(arr[4])){
+                          case(null){return null};
+                          case(?minute){
+                            switch(Nat.fromText(arr[0])){
+                              case(null){return null};
+                              case(?nanosecond){
+                                ? {
+                                  year = year;
+                                  month = month;
+                                  day = day;
+                                  hour = hour;
+                                  minute = minute;
+                                  nanosecond = nanosecond;
+                                };
+                              };
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+
+  };
+
+  public shared func deleteEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async Bool{
+    if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of drop
+
+      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be the owner of the mark
+        case (null) {
+          D.trap("Unauthorized.");
+          return false;
+        };
+        case (?val) {
+
+          let delimit = mark # "|";
+          let key = Text.concat(delimit, targetAcct);
+
+          switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
+            case (null) {
+              D.trap("Drop already exists.");
+              return false;
+            };
+            case (?val) {
+              Map.delete(ephemeral_drops, thash, key);
+              return true;
+            };
+          };
+        };
+      };
+
+    }else{
+
+      return false;
+
+    };
+  };
+
+  public shared func createEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text, date : Types.DateType ) : async Bool{
+    if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of drop
+
+      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be the owner of the mark
+        case (null) {
+          D.trap("Unauthorized.");
+          return false;
+        };
+        case (?val) {
+
+          let delimit = mark # ".";
+          let key = Text.concat(delimit, targetAcct);
+          let val = Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond);
+
+          switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
+            case (null) {
+              Map.set(ephemeral_drops, thash, key, val);
+              return true;
+            };
+            case (?val) {
+              D.trap("Drop already exists.");
+              return false;
+            };
+          };
+        };
+      };
+
+    }else{
+
+      return false;
+
+    };
+  };
+
+  public query func ephemeralDropReady( args : ICRC1.Account, mark : Text ) : async Bool{
+    let delimit = mark # ".";
+    let key = Text.concat(delimit, Principal.toText(args.owner));
+
+    switch (Map.get(ephemeral_drops, thash, key)) {
       case (null) {
         D.trap("Mark doesn't exist.");
         return false;
       };
       case (?val) {
-        
-        let arr = Iter.toArray(Text.split(val, #char '|'));
-        let y = Nat.fromText(arr[0]);
-        var yr : Int32 = 0;
-        let m = Nat.fromText(arr[1]);
-        var mnh : Nat = 0;
-        let d = Nat.fromText(arr[2]);
-        var dy : Nat = 0;
-        let h  = Nat.fromText(arr[3]);
-        var hr : Nat = 0;
-        let mn = Nat.fromText(arr[4]);
-        var min : Nat = 0;
-        let n = Nat.fromText(arr[5]);
-        var nan : Nat = 0;
-
-        switch (y){
-          case (null) {};
-          case (?x) {
-            yr := Int32.fromNat32(Nat32.fromNat(x));
+        switch(dateType( args, mark)) {
+          case (null)  {
+            return false;
            };
-        };
-
-        switch (m){
-          case (null) {};
-          case (?x) {
-            mnh := x;
-           };
-        };
-
-        switch (d){
-          case (null) {};
-          case (?x) {
-            dy := x;
-           };
-        };
-
-        switch (h){
-          case (null) {};
-          case (?x) {
-            hr := x;
-           };
-        };
-
-        switch (mn){
-          case (null) {};
-          case (?x) {
-            min := x;
-           };
-        };
-
-        switch (n){
-          case (null) {};
-          case (?x) {
-            nan := x;
-           };
-        };
-
-        if(yr!=0){
-          
-          let time : Components.Components = {
-            year = Int32.toInt(yr);
-            month = mnh;
-            day = dy;
-            hour = hr;
-            minute = min;
-            nanosecond = nan;
+          case (?date)  {
+            return Date.isFutureDate(date);
           };
 
-          return Date.isFutureDate(time);
-
-        }else{
-
-          return false;
-          
         };
         
       };
@@ -1182,89 +1169,24 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   };
 
-  public query func showTimeAllotment( args : ICRC1.Account, mark : Text ) : async Text{
+  public query func showEphemeralDrop( args : ICRC1.Account, mark : Text ) : async Text{
     let delimit = mark # ".";
     let key = Text.concat(delimit, Principal.toText(args.owner));
 
-    switch (Map.get(requested_allotments, thash, key)) {
+    switch (Map.get(ephemeral_drops, thash, key)) {
       case (null) {
         return "Mark doesn't exist.";
       };
       case (?val) {
-        
-        let arr = Iter.toArray(Text.split(val, #char '|'));
-        let y = Nat.fromText(arr[0]);
-        var yr : Int32 = 0;
-        let m = Nat.fromText(arr[1]);
-        var mnh : Nat = 0;
-        let d = Nat.fromText(arr[2]);
-        var dy : Nat = 0;
-        let h  = Nat.fromText(arr[3]);
-        var hr : Nat = 0;
-        let mn = Nat.fromText(arr[4]);
-        var min : Nat = 0;
-        let n = Nat.fromText(arr[5]);
-        var nan : Nat = 0;
-
-        switch (y){
-          case (null) {};
-          case (?x) {
-            yr := Int32.fromNat32(Nat32.fromNat(x));
+        switch(dateType( args, mark)) {
+          case (null)  {
+            return "Something went wrong.";
            };
-        };
-
-        switch (m){
-          case (null) {};
-          case (?x) {
-            mnh := x;
-           };
-        };
-
-        switch (d){
-          case (null) {};
-          case (?x) {
-            dy := x;
-           };
-        };
-
-        switch (h){
-          case (null) {};
-          case (?x) {
-            hr := x;
-           };
-        };
-
-        switch (mn){
-          case (null) {};
-          case (?x) {
-            min := x;
-           };
-        };
-
-        switch (n){
-          case (null) {};
-          case (?x) {
-            nan := x;
-           };
-        };
-
-        if(yr!=0){
-          
-          let time : Components.Components = {
-            year = Int32.toInt(yr);
-            month = mnh;
-            day = dy;
-            hour = hr;
-            minute = min;
-            nanosecond = nan;
+          case (?date)  {
+            return Date.show(date);
           };
 
-          return Date.show(time);
-
-        }else{
-          return "Invalid Date.";
         };
-
       };
     };
 
