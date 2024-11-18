@@ -1121,39 +1121,50 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
-  public shared func createEphemeralDropEvent( args : ICRC1.Account, mark : Text, imgUrl : Text) : async Bool{
-    switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be a generator
-      case (null) {
-          return false;
-      };
-      case (?val) {
-
-        switch (Map.get(generator_marks, phash, args.owner)){//must have a mark
-          case (null){
-            return false;
+  public shared ({ caller }) func createEphemeralDropEvent( args : ICRC1.BurnArgs, mark : Text, imgUrl : Text) : async ICRC1.TransferResult{
+    switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {//must be a generator
+          case (null) {
+              D.trap("Unauthorized.");
           };
-          case(?m) {
-            switch(Map.get(ephemeral_drop_events, thash, mark)){//event must not exist
-              case(null){
-                if(_isPngUrl(imgUrl) and m==mark){
-                  let g = Source.Source();
-                  let uuid = UUID.toText(await g.new());
-                  Map.set(ephemeral_drop_events, thash, mark, uuid);
-                  Map.set(ephemeral_drop_event_urls, thash, uuid, imgUrl);
-                  return true;
-                }else{
-                  return false;
-                };
-              };
-              case(?evt){
-                return false;
-              }
-            };
+          case (?val) {
 
+            switch (Map.get(generator_marks, phash, caller)){//must have a mark
+              case (null){
+                D.trap("Unauthorized.");
+              };
+              case(?m) {
+                switch(Map.get(ephemeral_drop_events, thash, mark)){//event must not exist
+                  case(null){
+                    if(_isPngUrl(imgUrl)){
+                      switch( await*  icrc1().burn_tokens(caller, args, false)){
+                        case(#trappable(val)){
+                          D.trap("Unauthorized.");
+                        };
+                        case(#awaited(val)){
+                          let g = Source.Source();
+                          let uuid = UUID.toText(await g.new());
+                          Map.set(ephemeral_drop_events, thash, mark, uuid);
+                          Map.set(ephemeral_drop_event_urls, thash, uuid, imgUrl);
+                          val;
+                        };
+                        case(#err(#trappable(err))){D.trap(err)};
+                        case(#err(#awaited(err))){D.trap(err)};
+                      };
+                      
+                    }else{
+                      D.trap("Mark doesn't exist.");
+                    };
+                  };
+                  case(?evt){
+                    D.trap("Drop event exists already.");
+                  };
+                };
+
+              };
+            };
           };
         };
-      };
-    };
+    
   };
 
   public shared func deleteEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async Bool{
