@@ -441,11 +441,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   // let CK_BTC_LEDGER = "mxzaz-hqaaa-aaaar-qaada-cai";
   let CK_BTC_LEDGER = "mc6ru-gyaaa-aaaar-qaaaq-cai";//testnet
 
-  let icpMinimum : Nat = 1_000_000_000;//e8s -> 10 icp token
+  let icpMinimum : Nat = 800_000_000;//e8s -> 8 icp token
+  let icpMaximum : Nat = 80_000_000_000;//e8s -> 800 icp token
   let icpFee : Nat = 10_000;
   let ethMinimum : Nat = 10_000_000_000_000_000;// wei -> 0.01 eth
+  let ethMaximum : Nat = 800_000_000_000_000_000;// wei -> 8 eth
   let ethFee : Nat = 2_000_000_000_000;//0.000002 ckETH
   let btcMinimum : Nat = 100_000;//sats -> 0.001 btc
+  let btcMaximum : Nat = 80_000_000; // sats -> 0.8 BTC
   let btcFee : Nat = 10;//0.0000001 ckBTC
   let oroFee : Nat = 10000; // 0.000000000001 oro 
 
@@ -495,6 +498,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let ephemeral_drops = Map.new<Text, Text>(thash);
 
   stable var generatorMintedBalance : Nat = 0;
+  //cost starts at 1/4 the value of the drop, so if you want to create a drop for 8 tokens you would need aprox. 10.75 tokens 
+  stable var ephemeralDropCost : Float = 0.25;
+  //cost to post message starts at 100% burn of tokens
+  stable var messageBoardCost : Float = 1.0;
 
 
   private func ephemeralMint(acct : Nat) : async ?Types.MintEphemeral {
@@ -704,6 +711,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           if(balance < icpMinimum and args.amount < icpMinimum) {
             D.trap("Minimum mint amount is 1 ICP");
           };
+
+          if(args.amount > icpMaximum) {
+            D.trap("Maximum mint amount is 800 ICP");
+          };
           
           let result = try{
             await ICPLedger.icrc2_transfer_from({
@@ -752,6 +763,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             D.trap("Minimum mint amount is 0.1 ETH");
           };
 
+          if(args.amount > ethMaximum) {
+            D.trap("Maximum mint amount is 8 ETH");
+          };
+
           let result = try{
             await ETHLedger.icrc2_transfer_from({
               to = {
@@ -797,6 +812,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
           if(balance < btcMinimum and args.amount < btcMinimum) {
             D.trap("Minimum mint amount is 0.01 BTC");
+          };
+
+          if(args.amount > btcMaximum) {
+            D.trap("Maximum mint amount is 0.8 BTC");
           };
 
           let result = try{
@@ -1123,47 +1142,47 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   public shared ({ caller }) func createEphemeralDropEvent( args : ICRC1.BurnArgs, mark : Text, imgUrl : Text) : async ICRC1.TransferResult{
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {//must be a generator
-          case (null) {
+      case (null) {
               D.trap("Unauthorized.");
-          };
-          case (?val) {
+      };
+      case (?val) {
 
-            switch (Map.get(generator_marks, phash, caller)){//must have a mark
-              case (null){
-                D.trap("Unauthorized.");
-              };
-              case(?m) {
-                switch(Map.get(ephemeral_drop_events, thash, mark)){//event must not exist
-                  case(null){
-                    if(_isPngUrl(imgUrl)){
-                      switch( await*  icrc1().burn_tokens(caller, args, false)){
-                        case(#trappable(val)){
+        switch (Map.get(generator_marks, phash, caller)){//must have a mark
+            case (null){
+              D.trap("Unauthorized.");
+            };
+            case(?m) {
+              switch(Map.get(ephemeral_drop_events, thash, mark)){//event must not exist
+                case(null){
+                  if(_isPngUrl(imgUrl)){
+                    switch( await*  icrc1().burn_tokens(caller, args, false)){
+                      case(#trappable(val)){
                           D.trap("Unauthorized.");
-                        };
-                        case(#awaited(val)){
+                      };
+                      case(#awaited(val)){
                           let g = Source.Source();
                           let uuid = UUID.toText(await g.new());
                           Map.set(ephemeral_drop_events, thash, mark, uuid);
                           Map.set(ephemeral_drop_event_urls, thash, uuid, imgUrl);
                           val;
-                        };
-                        case(#err(#trappable(err))){D.trap(err)};
-                        case(#err(#awaited(err))){D.trap(err)};
                       };
-                      
-                    }else{
-                      D.trap("Mark doesn't exist.");
+                      case(#err(#trappable(err))){D.trap(err)};
+                      case(#err(#awaited(err))){D.trap(err)};
                     };
-                  };
-                  case(?evt){
-                    D.trap("Drop event exists already.");
+                      
+                  }else{
+                    D.trap("Mark doesn't exist.");
                   };
                 };
-
+                case(?evt){
+                  D.trap("Drop event exists already.");
+                };
               };
+
             };
-          };
         };
+      };
+    };
     
   };
 
