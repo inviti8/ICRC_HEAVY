@@ -447,7 +447,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let ethMinimum : Nat = 10_000_000_000_000_000;// wei -> 0.01 eth
   let ethMaximum : Nat = 800_000_000_000_000_000;// wei -> 8 eth
   let ethFee : Nat = 2_000_000_000_000;//0.000002 ckETH
-  let btcMinimum : Nat = 100_000;//sats -> 0.001 btc
+  let btcMinimum : Nat = 100_000;//sats -> 0.001 BTC
   let btcMaximum : Nat = 80_000_000; // sats -> 0.8 BTC
   let btcFee : Nat = 10;//0.0000001 ckBTC
   let oroFee : Nat = 10000; // 0.000000000001 oro 
@@ -493,15 +493,21 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_marks = Map.new<Principal, ?Text>(phash);
   let mark_logos = Map.new<Text, Text>(thash);
   let marked_mint_balances = Map.new<Text, Nat>(thash);
+
+  stable var generatorMintedBalance : Nat = 0;
+
+  //minters who create a mark have ability to create token drop events & board posts at burn cost
   let ephemeral_drop_events = Map.new<Text, Text>(thash);
   let ephemeral_drop_event_urls = Map.new<Text, Text>(thash);
   let ephemeral_drops = Map.new<Text, Text>(thash);
-
-  stable var generatorMintedBalance : Nat = 0;
   //cost starts at 1/4 the value of the drop, so if you want to create a drop for 8 tokens you would need aprox. 10.75 tokens 
-  stable var ephemeralDropCost : Float = 0.25;
+  stable var ephemeralDropCost : Nat = 25; 
+  
+
+  let message_board = Map.new<Text, Text>(thash);
+  let message_board_urls = Map.new<Text, Text>(thash);
   //cost to post message starts at 100% burn of tokens
-  stable var messageBoardCost : Float = 1.0;
+  stable var messageBoardCost : Nat = 100;
 
 
   private func ephemeralMint(acct : Nat) : async ?Types.MintEphemeral {
@@ -1140,7 +1146,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
-  public shared ({ caller }) func createEphemeralDropEvent( args : ICRC1.BurnArgs, mark : Text, imgUrl : Text) : async ICRC1.TransferResult{
+  public shared ({ caller }) func createEphemeralDropEvent( args : ICRC1.BurnArgs, dropValue : Nat, mark : Text, imgUrl : Text) : async ICRC1.TransferResult{
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {//must be a generator
       case (null) {
               D.trap("Unauthorized.");
@@ -1155,20 +1161,25 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               switch(Map.get(ephemeral_drop_events, thash, mark)){//event must not exist
                 case(null){
                   if(_isPngUrl(imgUrl)){
-                    switch( await*  icrc1().burn_tokens(caller, args, false)){
-                      case(#trappable(val)){
-                          D.trap("Unauthorized.");
-                      };
-                      case(#awaited(val)){
-                          let g = Source.Source();
-                          let uuid = UUID.toText(await g.new());
-                          Map.set(ephemeral_drop_events, thash, mark, uuid);
-                          Map.set(ephemeral_drop_event_urls, thash, uuid, imgUrl);
-                          val;
-                      };
-                      case(#err(#trappable(err))){D.trap(err)};
-                      case(#err(#awaited(err))){D.trap(err)};
+                    if(args.amount >= (Nat.div(dropValue, 100)*ephemeralDropCost)){
+                        switch( await*  icrc1().burn_tokens(caller, args, false)){
+                          case(#trappable(val)){
+                              D.trap("An Event currently exists for this mark.");
+                          };
+                          case(#awaited(val)){
+                              let g = Source.Source();
+                              let uuid = UUID.toText(await g.new());
+                              Map.set(ephemeral_drop_events, thash, mark, uuid);
+                              Map.set(ephemeral_drop_event_urls, thash, uuid, imgUrl);
+                              val;
+                          };
+                          case(#err(#trappable(err))){D.trap(err)};
+                          case(#err(#awaited(err))){D.trap(err)};
+                        };
+                    }else{
+                      D.trap("Burn amount is insufficient to create Drop Event.");
                     };
+                    
                       
                   }else{
                     D.trap("Mark doesn't exist.");
