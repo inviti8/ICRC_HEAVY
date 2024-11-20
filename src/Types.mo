@@ -22,4 +22,11 @@ module {
     minute : Nat;
     nanosecond : Nat;
   };
+  public type EphemeralDrop =  {
+    event_id : Text;
+    date : Text;
+    drop_id : Text;
+    slot : Nat;
+    amount : Nat;
+  };
 }

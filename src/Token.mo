@@ -498,8 +498,13 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   //minters who create a mark have ability to create token drop events & board posts at burn cost
   let ephemeral_drop_events = Map.new<Text, Text>(thash);
+  let ephemeral_drop_event_dates = Map.new<Text, Text>(thash);
+  let ephemeral_drop_event_values = Map.new<Text, Nat>(thash);
+  let ephemeral_drop_event_slots = Map.new<Text, Nat>(thash);
   let ephemeral_drop_event_urls = Map.new<Text, Text>(thash);
-  let ephemeral_drops = Map.new<Text, Text>(thash);
+  let ephemeral_drops = Map.new<Text, Text>(thash);//Used for assignment
+  let ephemeral_drop_values = Map.new<Text, Nat>(thash);//Used for assignment
+  let ephemeral_drop_slots = Map.new<Text, Nat>(thash);//Used for assignment
   //cost starts at 1/4 the value of the drop, so if you want to create a drop for 8 tokens you would need aprox. 10.75 tokens 
   stable var ephemeralDropCost : Nat = 25; 
   
@@ -1121,10 +1126,59 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
       case(?evt){
         Map.delete(ephemeral_drop_events, thash, mark);
+        Map.delete(ephemeral_drop_event_values, thash, evt);
+        Map.delete(ephemeral_drop_event_slots, thash, evt);
         Map.delete(ephemeral_drop_event_urls, thash, evt);
         return true;
       };
     };
+  };
+
+  private func _updateDropEvent(mark : Text, uuid : Text, date : Text, dropValue : Nat, slotCount : Nat, imgUrl : Text) : Bool {
+    switch(Map.get(ephemeral_drop_events, thash, mark)){//event must exist
+      case(null){
+        Map.set(ephemeral_drop_events, thash, mark, uuid);
+        Map.set(ephemeral_drop_event_dates, thash, uuid, date);
+        Map.set(ephemeral_drop_event_values, thash, uuid, dropValue);
+        Map.set(ephemeral_drop_event_slots, thash, uuid, slotCount);
+        Map.set(ephemeral_drop_event_urls, thash, uuid, imgUrl);
+        return true;
+      };
+      case(?evt){
+        return false;
+      };
+    };
+  };
+
+  private func _updateEphemeralDrop(drop_id : Text, date : Text, slot :Nat, val : Nat) : Bool {
+    switch(Map.get(ephemeral_drops, thash, drop_id)){
+      case(null){
+        return false;
+      };
+      case(?drop){
+        Map.set(ephemeral_drops, thash, drop_id, date);
+        Map.set(ephemeral_drop_slots, thash, drop_id, slot);
+        Map.set(ephemeral_drop_values, thash, drop_id, val);
+        Map.set(ephemeral_drop_event_slots, thash, drop_id, Nat.sub(slot, 1));
+        return true;
+      };
+    };
+    
+  };
+
+  private func _deletEphemeralDrop(drop_id : Text) : Bool {
+    switch(Map.get(ephemeral_drops, thash, drop_id)){
+      case(null){
+        return false;
+      };
+      case(?drop){
+        Map.delete(ephemeral_drops, thash, drop_id);
+        Map.delete(ephemeral_drop_slots, thash, drop_id);
+        Map.delete(ephemeral_drop_values, thash, drop_id);
+        return true;
+      };
+    };
+    
   };
 
   public shared func deleteEphemeralDropEvent( args : ICRC1.Account, mark : Text) : async Bool{
@@ -1146,10 +1200,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
-  public shared ({ caller }) func createEphemeralDropEvent( args : ICRC1.BurnArgs, dropValue : Nat, mark : Text, imgUrl : Text) : async ICRC1.TransferResult{
+  public shared ({ caller }) func createEphemeralDropEvent( args : ICRC1.BurnArgs, date : Types.DateType, dropValue : Nat, slotCount : Nat, mark : Text, imgUrl : Text) : async ICRC1.TransferResult{
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {//must be a generator
       case (null) {
-              D.trap("Unauthorized.");
+        D.trap("Unauthorized.");
       };
       case (?val) {
 
@@ -1161,17 +1215,21 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               switch(Map.get(ephemeral_drop_events, thash, mark)){//event must not exist
                 case(null){
                   if(_isPngUrl(imgUrl)){
-                    if(args.amount >= (Nat.div(dropValue, 100)*ephemeralDropCost)){
+                    if(args.amount >= Nat.mul(Nat.div(dropValue, 100), ephemeralDropCost)){
                         switch( await*  icrc1().burn_tokens(caller, args, false)){
                           case(#trappable(val)){
-                              D.trap("An Event currently exists for this mark.");
+                              D.trap("Something went wrong.");
                           };
                           case(#awaited(val)){
                               let g = Source.Source();
                               let uuid = UUID.toText(await g.new());
-                              Map.set(ephemeral_drop_events, thash, mark, uuid);
-                              Map.set(ephemeral_drop_event_urls, thash, uuid, imgUrl);
-                              val;
+                              let d = Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond);
+                              if(_updateDropEvent(mark, uuid, d, dropValue, slotCount, imgUrl)){
+                                val;
+                              }else{
+                                D.trap("Failed to update drop event data.");
+                              };
+                              
                           };
                           case(#err(#trappable(err))){D.trap(err)};
                           case(#err(#awaited(err))){D.trap(err)};
@@ -1216,8 +1274,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               return false;
             };
             case (?val) {
-              Map.delete(ephemeral_drops, thash, key);
-              return true;
+              return _deletEphemeralDrop(key);
             };
           };
         };
@@ -1228,38 +1285,153 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
-  public shared func createEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text, date : Types.DateType ) : async Bool{
+  public shared func generatorCreateEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async ? Types.EphemeralDrop{
     if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of drop
 
-      switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be the owner of the mark
+      return switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be the owner of the mark
         case (null) {
           D.trap("Unauthorized.");
-          return false;
         };
-        case (?val) {
+        case (?gen) {
 
-          let key = _ephemeralDropKey(targetAcct, mark);
-          let val = Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond);
-
-          switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
-            case (null) {
-              Map.set(ephemeral_drops, thash, key, val);
-              return true;
+          switch (Map.get(ephemeral_drop_events, thash, mark)) {
+            case(null){
+              D.trap("Mark doesn't exist.");
             };
-            case (?val) {
-              D.trap("Drop already exists.");
-              return false;
+            case(?event){
+
+              switch (Map.get(ephemeral_drop_event_slots, thash, event)) {
+                case(null){
+                  D.trap("Invalid slot.");
+                };
+                case(?slot){
+                  let key = _ephemeralDropKey(targetAcct, mark);
+                  switch (Map.get(ephemeral_drop_event_dates, thash, event)) {
+                    case(null){
+                      D.trap("Drop date not found.");
+                    };
+                    case(?d){
+                      switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
+                        case (null) {
+                          if(Nat.greater(slot, 0)){
+                            switch (Map.get(ephemeral_drop_values, thash, key)) {
+                              case(null){
+                                D.trap("Drop value not found.");
+                              };
+                              case(?val){
+                                if(_updateEphemeralDrop(key, d, slot, val)){
+                                  ?{
+                                    event_id = event;
+                                    date = d;
+                                    drop_id = key;
+                                    slot = slot;
+                                    amount = val;
+                                  };
+                                }else{
+                                  D.trap("Drop data update failed.");
+                                };
+                                
+                              };
+                            };
+                            
+                          }else{
+                            D.trap("All slots filled.");
+                          };
+                          
+                        };
+                        case (?val) {
+                          D.trap("Drop already exists.");
+                        };
+
+                      };
+                    };
+                  };
+                };
+              };
+              
             };
           };
         };
       };
 
     }else{
-      return false;
+      D.trap("Unauthorized.");
     };
   };
 
-  public query func ephemeralDropReady( args : ICRC1.Account, mark : Text ) : async Bool{
+  public shared ({ caller }) func joinCreateEphemeralDrop( mark : Text ) : async ? Types.EphemeralDrop{
+    switch (Map.get(ephemeral_drop_events, thash, mark)) {
+      case(null){
+          D.trap("Mark doesn't exist.");
+        };
+      case(?event){
+
+        switch (Map.get(ephemeral_drop_event_slots, thash, event)) {
+          case(null){
+                  D.trap("Invalid slot.");
+          };
+          case(?slot){
+            let key = _ephemeralDropKey(Principal.toText(caller), mark);
+
+            switch (Map.get(ephemeral_drop_event_dates, thash, event)) {
+              case(null){
+                D.trap("Drop date not found.");
+              };
+              case(?d){
+                switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
+                  case (null) {
+                    if(Nat.greater(slot, 0)){
+                      switch (Map.get(ephemeral_drop_values, thash, key)) {
+                        case(null){
+                          D.trap("Drop value not found.");
+                        };
+                        case(?val){
+                          if(_updateEphemeralDrop(key, d, slot, val)){
+                              ?{
+                                event_id = event;
+                                date = d;
+                                drop_id = key;
+                                slot = slot;
+                                amount = val;
+                              };
+                          }else{
+                            D.trap("Drop data update failed.");
+                          };
+                                
+                        };
+                      };
+                            
+                    }else{
+                      D.trap("All slots filled.");
+                    };
+                          
+                  };
+                  case (?val) {
+                    D.trap("Drop already exists.");
+                  };
+
+                };
+              };
+            };
+          };
+        };
+              
+      };
+    };
+  };
+
+  public query func getEphemeralDropEventId( mark : Text ) : async Text{
+    switch (Map.get(ephemeral_drop_events, thash, mark)) {
+      case(null){
+        return "No event found."
+      };
+      case(?event){
+        return event;
+      };
+    };
+  };
+
+  public query func isEphemeralDropReady( args : ICRC1.Account, mark : Text ) : async Bool{
     let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
 
     switch (Map.get(ephemeral_drops, thash, key)) {
@@ -1281,7 +1453,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   };
 
-  public query func showEphemeralDrop( args : ICRC1.Account, mark : Text ) : async Text{
+  public query func showEphemeralDropDate( args : ICRC1.Account, mark : Text ) : async Text{
     let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
 
     switch (Map.get(ephemeral_drops, thash, key)) {
@@ -1300,6 +1472,32 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
     };
 
+  };
+
+  public shared ({ caller }) func collectEphemeralDrop( mark : Text ) : async Bool{
+    let key = _ephemeralDropKey(Principal.toText(caller), mark);
+
+    switch (Map.get(ephemeral_drops, thash, key)) {
+      case (null) {
+        D.trap("Mark doesn't exist.");
+        return false;
+      };
+      case (?val) {
+        switch(_dateType( Principal.toText(caller), mark)) {
+          case (null)  {
+            return false;
+           };
+          case (?date)  {
+            if (Date.isFutureDate(date)){
+              return false;
+            }else{
+              return false;
+            };
+          };
+        };
+      };
+    };
+    return true;
   };
 
   public shared func setMarkLogo(args : ICRC1.Account, markType : Types.MarkType) : async Bool{
