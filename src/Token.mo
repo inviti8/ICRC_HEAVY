@@ -515,7 +515,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   //cost to post message starts at 100% burn of tokens
   stable var messageBoardCost : Nat = 100;
 
-
+  /**
+   * This method mints ephemeral tokens for a given account.
+   *
+   * @param acct The account for which the tokens should be minted.
+   * @return A `MintEphemeral` object representing the minted tokens, or `null` if there was an error.
+   */
   private func ephemeralMint(acct : Nat) : async ?Types.MintEphemeral {
 
     return switch(Map.get<Nat, Text>(generators, nhash, acct)){//if generator exists, tokens are minted to them
@@ -547,6 +552,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
   };
 
+/**
+ * This method is the heartbeat of the contract, responsible for periodically minting tokens and updating various state variables.
+ */
   system func heartbeat() : async () {
     if (tick % ephemeralRewardInterval == 0) {
       Debug.print("mintedCount = " # debug_show(mintedCount));
@@ -576,6 +584,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     tick := tick + 1;
   };
 
+  /**
+
+  Mints ephemeral tokens for a given account.
+  @param acct The account to mint tokens for. 
+  
+  */ 
   private func mintEphemeralTokens(acct : Nat) : async () {
     let args :  ?Types.MintEphemeral = await ephemeralMint(acct);
     var memo : Blob = Text.encodeUtf8("EPHEMERAL");
@@ -612,33 +626,42 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   };
 
+  /**
+   * This method mints inflationary tokens based on the number of tokens already minted and the current exchange rate.
+   *
+   * @param args The arguments for the mint operation, including the coin type and amount to mint.
+   * @param caller The principal that is calling this method.
+   * @param memo A blob that contains additional information about the mint operation.
+   */
   private func mintInflationaryTokens(args : Types.MintFromArgs, caller : Principal, memo : Blob ) : async ICRC1.TransferResult {
     
+    // Calculate the exchange rate based on the number of tokens minted
     var exchangeRate : Nat = icpExchangeRate;
     if(mintedCount < maturity){//at maturity inflation stops
       switch (args.coin) {
         case (#ICP){
-          exchangeRate-=icpInflation;
-          icpExchangeRate-=icpInflation;
+          exchangeRate -= icpInflation;
+          icpExchangeRate -= icpInflation;
         };
         case (#ETH){
           exchangeRate := ckEthExchangeRate;
-          exchangeRate-=ckEthInflation;
-          ckEthExchangeRate-=ckEthInflation;
+          exchangeRate -= ckEthInflation;
+          ckEthExchangeRate -= ckEthInflation;
         };
         case (#BTC){
           exchangeRate := ckBtcExchangeRate;
-          exchangeRate-=ckBtcInflation;
-          ckBtcExchangeRate-=ckBtcInflation;
+          exchangeRate -= ckBtcInflation;
+          ckBtcExchangeRate -= ckBtcInflation;
         };
       };
     };
     
+    // Calculate the number of tokens to mint based on the exchange rate
     var mintingAmount : Nat = exchangeRate * (args.amount / 100_000_000);
     generatorMintedBalance := generatorMintedBalance + mintingAmount;
     mintedCount := mintedCount + 1;
 
-    let newtokens =  await* icrc1().mint_tokens(Principal.fromActor(this), {
+    let newtokens = await* icrc1().mint_tokens(Principal.fromActor(this), {
         to = switch(args.target){
             case(null){
               {
@@ -669,8 +692,17 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
   };
 
+  /**
+   * This method mints new tokens from the caller's account.
+   * It first checks if the token is frozen, and if so, it raises an error.
+   * Then it checks if the caller has already minted a token, and if so, it raises an error.
+   * If both conditions are met, it mints the tokens and updates the relevant maps.
+   *
+   * @param args The arguments for the mint operation, including the coin type and amount to mint.
+   */
   public shared ({ caller }) func mintFromToken(args : Types.MintFromArgs) : async ICRC1.TransferResult {
 
+      // Check if the token is frozen
       switch (await isTokenFrozen()) {
         case (null) {
           D.trap("Something went wrong.");
@@ -682,6 +714,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
+      // Check if the caller has already minted a token
       switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {
         case (null) {};
         case (?val) {
@@ -692,7 +725,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       var memo : Blob = Text.encodeUtf8("UNMARKED");
       var marked : Bool = false;
 
-      switch (args.mintMark){//Minter can add custom mark to coins
+      // Add custom mark to coins
+      switch (args.mintMark){
         case(null)  {};
         case(?val)  {
           switch (Map.get(generator_marks, phash, caller)){
@@ -707,12 +741,13 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
 
+      // Mint the tokens
       switch (args.coin) {
         case (#ICP){
 
           let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
 
-          // check ICP balance of the callers dedicated account
+          // Check ICP balance of the callers dedicated account
           let balance = await ICPLedger.icrc1_balance_of(
             {
               owner = caller;
@@ -763,7 +798,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
           let ETHLedger : CkETHTypes.Service = actor(CK_ETH_LEDGER);
 
-          // check ICP balance of the callers dedicated account
+          // Check ICP balance of the callers dedicated account
           let balance = await ETHLedger.icrc1_balance_of(
             {
               owner = caller;
@@ -814,7 +849,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
           let BTCLedger : CkBTCTypes.Service = actor(CK_BTC_LEDGER);
 
-          // check ICP balance of the callers dedicated account
+          // Check ICP balance of the callers dedicated account
           let balance = await BTCLedger.icrc1_balance_of(
             {
               owner = caller;
@@ -889,6 +924,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       return result;
   };
 
+/**
+ * Withdraw ICP tokens.
+ *
+ * @param {Nat} amount The amount of ICP to withdraw.
+ * @return {ICPTypes.Result_2}
+ */
   public shared ({ caller }) func withdrawICP(amount : Nat) : async ICPTypes.Result_2 {
     
       if(caller != owner){ D.trap("Unauthorized")};
@@ -941,6 +982,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       result;
   };
 
+  /**
+   * Withdraw ckETH tokens.
+   *
+   * @param {Nat} amount The amount of ckETH to withdraw.
+   * @return {CkETHTypes.Result_2}
+   */
   public shared ({ caller }) func withdrawCkETH(amount : Nat) : async CkETHTypes.Result_2 {
 
       if(caller != owner){ D.trap("Unauthorized")};
@@ -993,7 +1040,19 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       result;
   };
 
+  /**
+   * Withdraw ckBTC tokens.
+   *
+   * @param {Nat} amount The amount of ckBTC to withdraw.
+   * @return {CkBTCTypes.Result_2}
+   */
   public shared ({ caller }) func withdrawCkBTC(amount : Nat) : async CkBTCTypes.Result_2 {
+
+      // Description: This method allows the owner to withdraw a specified amount of ckBTC tokens from the canister.
+      //              The method first checks if the caller is authorized. Then, it verifies that there are enough ckBTC
+      //              tokens in the canister and that the withdrawal amount does not exceed the maximum allowed.
+      //              If these conditions are met, the method transfers the specified amount of ckBTC to the caller,
+      //              deducting the transfer fee from the canister's balance.
 
       if(caller != owner){ D.trap("Unauthorized")};
 
@@ -1203,6 +1262,18 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
+/**
+ * Create Ephemeral Drop Event:
+ *
+ * @param {Nat} amount The amount of ckBTC to withdraw.
+ * @param {Text} date The date of the event in the format 'YYYY-MM-DD HH:MM:SS.SSS'.
+ * @param {Nat} dropValue The value of the drop in atomic units.
+ * @param {Nat} slotCount The number of slots for the event.
+ * @param {Text} mark The unique identifier for the event.
+ * @param {Text} imgUrl The URL of the image associated with the event.
+ *
+ * This method allows authorized generators to create a new ephemeral drop event. It first checks if the caller is a valid generator. If not, it returns an error message. Then it verifies that the mark provided exists and that there is no existing drop event with the same mark. If all conditions are met, it burns the specified amount of tokens and creates a new drop event with the given parameters.
+ */
   public shared ({ caller }) func createEphemeralDropEvent( args : ICRC1.BurnArgs, date : Types.DateType, dropValue : Nat, slotCount : Nat, mark : Text, imgUrl : Text) : async ICRC1.TransferResult{
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {//must be a generator
       case (null) {
@@ -1258,6 +1329,15 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     
   };
 
+/**
+ * Delete Ephemeral Drop:
+ *
+ * @param {ICRC1.Account} args The account to check.
+ * @param {Text} mark The unique identifier for the drop.
+ * @param {Text} targetAcct The target account that should own the drop.
+ *
+ * This method allows authorized generators to delete an ephemeral drop. It first checks if the caller is a valid generator and owns the mark associated with the drop. If not, it returns an error message. Then it verifies that the drop exists and that the target account matches the owner of the drop. If all conditions are met, it deletes the drop.
+ */
   public shared func deleteEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async Bool{
     if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of drop
 
@@ -1288,7 +1368,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
-
+  /**
+  * Join Ephemeral Drop:
+  *
+  * @param {Types.MintEphemeral} args The mint ephemeral arguments.
+  * @param {Text} mark The unique identifier for the drop.
+  *
+  * This method allows users to join an existing ephemeral drop. It first checks if the drop exists and that the user is not already a part of it. If all conditions are met, it updates the drop data accordingly.
+  */
   public shared func joinEphemeralDrop( args :Types.MintEphemeral, mark : Text ) : async ? Types.EphemeralDrop{
     switch (Map.get(ephemeral_drop_events, thash, mark)) {
       case(null){
@@ -1358,6 +1445,13 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
+  /**
+  * Get Ephemeral Drop Event ID:
+  *
+  * @param {Text} mark The unique identifier for the drop.
+  *
+  * This method retrieves the event ID associated with a given ephemeral drop mark. If no event exists, it returns an error message.
+  */
   public query func getEphemeralDropEventId( mark : Text ) : async Text{
     switch (Map.get(ephemeral_drop_events, thash, mark)) {
       case(null){
@@ -1369,6 +1463,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
+/**
+ * Check if an ephemeral drop is ready:
+ *
+ * @param {ICRC1.Account} args The account to check.
+ * @param {Text} mark The unique identifier for the drop.
+ *
+ * This method checks if an ephemeral drop is ready by verifying that it has a date in the future and that the account owns the drop. If all conditions are met, it returns True; otherwise, it returns False.
+ */
   public query func isEphemeralDropReady( args : ICRC1.Account, mark : Text ) : async Bool{
     let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
 
@@ -1391,6 +1493,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   };
 
+  /**
+  * Show Ephemeral Drop Date:
+  *
+  * @param {ICRC1.Account} args The account to check.
+  * @param {Text} mark The unique identifier for the drop.
+  *
+  * This method displays the date associated with a given ephemeral drop mark. If no date exists, it returns an error message.
+  */
   public query func showEphemeralDropDate( args : ICRC1.Account, mark : Text ) : async Text{
     let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
 
@@ -1414,8 +1524,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
 
   private func ephemeralDropMint(owner : Principal, key : Text, amount : Nat) : async ?Types.MintEphemeral {
-
-
     return ?{
             target = switch(Map.get<Text, ?[Nat8]>(ephemeral_drop_accounts, thash, key)){
               case(null){
@@ -1484,6 +1592,13 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   };
 
+  /**
+  * Collect Ephemeral Drop:
+  *
+  * @param {Text} mark The unique identifier for the drop.
+  *
+  * This method collects an ephemeral drop by verifying that it exists, its date is in the past, and the account owns the drop. If all conditions are met, it mints tokens and updates the drop status; otherwise, it returns an error message.
+  */
   public shared ({ caller }) func collectEphemeralDrop( mark : Text ) : async ICRC1.TransferResult {
     let key = _ephemeralDropKey(Principal.toText(caller), mark);
 
@@ -1532,23 +1647,43 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   };
 
+  /**
+  * Set Mark Logo:
+  *
+  * @param {ICRC1.Account} args The account to set the logo for.
+  * @param {Types.MarkType} markType The type of mark containing the logo URL.
+  *
+  * This method sets a logo for a given mark, ensuring that only authorized accounts can perform this action and validating the format of the logo URL. If successful, it updates the map with the new logo; otherwise, it returns an error message.
+  */
   public shared func setMarkLogo(args : ICRC1.Account, markType : Types.MarkType) : async Bool{
     if(_isPngUrl(markType.logoUrl)){
+
+      // Check if the account is authorized to set a logo for this mark
       switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {
         case (null) {
           D.trap("Unauthorized.");
         };
         case (?val) {
+          // Update the map with the new logo
           Map.set(mark_logos, thash, markType.mark, markType.logoUrl);
           return true;
         };
       };
+
     }else{
       D.trap("Logo url isn't the correct format.");
       return false;
     };
+
   };
 
+  /**
+  * Check if account is a generator:
+  *
+  * @param {ICRC1.Account} args The account to check.
+  *
+  * This method checks whether an account is authorized as a generator. It does this by searching the 'generators' map for the given owner's principal, returning true if found and false otherwise.
+  */
   public query func isGenerator(args : ICRC1.Account)  : async Bool{
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {
       case (null) {
@@ -1560,54 +1695,121 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     };
   };
 
+  /**
+  * Retrieve the minimum ICP tokens required for a drop.
+  *
+  * This method retrieves and returns the minimum ICP tokens required for a drop, expressed as a floating-point number (i.e., in units of 0.000001 ICP).
+  */
   public query func icpMinimumTokensRequired() : async Float{
     return Float.fromInt(icpMinimum / 100_000_000);
   };
 
+  /**
+  * Retrieve the current ICP exchange rate.
+  *
+  * This method retrieves and returns the current ICP exchange rate, expressed as a floating-point number (i.e., in units of 0.000001 ICP per DAI).
+  */
   public query func getIcpExchangeRate() : async Float{
     return Float.fromInt(icpExchangeRate / 10_000_000_000_000_000);
   };
 
+  /**
+  * Retrieve the total amount of ICP tokens collected in the treasury.
+  *
+  * This method retrieves and returns the total amount of ICP tokens collected in the treasury, expressed as a floating-point number (i.e., in units of 0.000001 ICP).
+  */
   public query func icpTreasuryTotalCollected() : async Float{
     return Float.fromInt(icpTreasury / 100_000_000);
   };
 
+  /**
+   * Retrieve the minimum ETH tokens required for a drop.
+   *
+   * @return The minimum ETH tokens required for a drop, expressed as a floating-point number (i.e., in units of 0.000001 ETH).
+   */
   public query func ethMinimumTokensRequired() : async Float{
     return Float.fromInt(ethMinimum / 100_000_000);
   };
 
+  /**
+  * Retrieve the current CK-ETH exchange rate.
+  *
+  * This method retrieves and returns the current CK-ETH exchange rate, expressed as a floating-point number (i.e., in units of 0.000001 ETH per DAI).
+  */
   public query func getckEthExchangeRate() : async Float{
     return Float.fromInt(ckEthExchangeRate / 10_000_000_000_000_000);
   };
 
+  /**
+   * Retrieve the total amount of ETH tokens collected in the treasury.
+   *
+   * @return The total amount of ETH tokens collected in the treasury, expressed as a floating-point number (i.e., in units of 0.000001 ETH).
+   */
   public query func ethTreasuryTotalCollected() : async Float{
     return Float.fromInt(ethTreasury / 100_000_000);
   };
 
+  /**
+   * Retrieve the minimum Bitcoin tokens required for a drop.
+   *
+   * This method retrieves and returns the minimum Bitcoin tokens required for a drop, expressed as a floating-point number (i.e., in units of 0.000001 BTC).
+   */
   public query func btcMinimumTokensRequired() : async Float{
     return Float.fromInt(btcMinimum / 100_000_000);
   };
-
+  /**
+  *
+  * This method retrieves and returns the current CK-BTC exchange rate, expressed as a floating-point number (i.e., in units of 0.000001 BTC per DAI).
+  */
   public query func getckBtcExchangeRate() : async Float{
     return Float.fromInt(ckBtcExchangeRate / 10_000_000_000_000_000);
   };
 
+  /**
+   * Retrieve the total amount of Bitcoin tokens collected in the treasury.
+   *
+   * @return The total amount of Bitcoin tokens collected in the treasury, expressed as a floating-point number (i.e., in units of 0.000001 BTC).
+   */
   public query func btcTreasuryTotalCollected() : async Float{
     return Float.fromInt(btcTreasury / 100_000_000);
   };
 
+  /**
+  * Retrieve the total number of mints performed.
+  *
+  * This method retrieves and returns the total number of mints performed, providing insight into the overall minting activity.
+  */
   public query func getNumberOfMints() : async Nat{
     return mintedCount;
   };
 
+  /**
+  * Retrieve the current reward cycle:
+  *
+  * @return The current reward cycle as a natural number.
+  *
+  * This method retrieves and returns the current reward cycle, providing insight into the overall minting activity.
+  */
   public query func getCurrentRewardCycle() : async Nat{
     return ephemeralRewardCycle;
   };
 
+  /**
+   * Retrieve the total number of ephemeral mints performed:
+   *
+   * This method retrieves and returns the total number of ephemeral mints performed, providing insight into the overall minting activity.
+   */
   public query func getNumberOfEphemeralMints() : async Nat{
     return ephemeralMintCount;
   };
 
+  /**
+  * Retrieves the balance of an account.
+  *
+  * This method retrieves and returns the balance of a given account, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+  *
+  * @param {ICRC1.Account} args The account to retrieve the balance for.
+  */
   public shared func balance(args : ICRC1.Account) : async Float{
     let balance = await icrc1_balance_of(
       {
@@ -1618,30 +1820,60 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     return Float.fromInt(balance / 10_000_000_000_000_000)
   };
 
+  /**
+  * Retrieves the total supply of tokens.
+  *
+  * This method retrieves and returns the total supply of tokens, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+  */
   public shared func total_supply() : async Float{
     let balance = await icrc1_total_supply(); 
     return Float.fromInt(balance / 10_000_000_000_000_000)
   };
 
-  public shared func mintedBalanceByMark(args : ICRC1.Account, mark : Text ) : async Float{
-    switch (Map.get(marked_mint_balances, thash, mark)) {
-      case (null) {
-        D.trap("Mark doesn't exist.");
+  /**
+  * Retrieves the minted balance by mark for a given account.
+  *
+  * This method retrieves and returns the minted balance for a specified mark, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+  *
+  * @param {ICRC1.Account} args The account to retrieve the minted balance for.
+  * @param {Text} mark The mark for which to retrieve the minted balance.
+  */
+  public shared func mintedBalanceByMark(args : ICRC1.Account, mark : Text) : async Float{
+      switch (Map.get(marked_mint_balances, thash, mark)) {
+        case (null) {
+          D.trap("Mark doesn't exist.");
+        };
+        case (?balance) {
+          return Float.fromInt(balance / 10_000_000_000_000_000);
+        };
       };
-      case (?balance) {
-        return Float.fromInt(balance / 10_000_000_000_000_000);
-      };
-    };
   };
-
+  
+/**
+ * Retrieves the total ephemeral minted balance.
+ *
+ * This method retrieves and returns the total ephemeral minted balance, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+ */
   public shared func totalEphemeralMintedBalance() : async Float{
     return Float.fromInt(ephemeralMintedBalance)
   };
 
+  /**
+   * Retrieves the total generator minted balance.
+   *
+   * This method retrieves and returns the total generator minted balance, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+   */
   public shared func totalGeneratorMintedBalance() : async Float{
     return Float.fromInt(generatorMintedBalance)
   };
 
+  /**
+  * Retrieves the current ephemeral reward.
+  *
+  * This method retrieves and returns the current ephemeral reward, providing insight into the overall minting activity.
+  *
+  * @return The current ephemeral reward as a natural number.
+  */
   public query func currentEphemeralReward() : async Nat{
     return ephemeralReward;
   };
