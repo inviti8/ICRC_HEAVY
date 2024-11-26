@@ -10,6 +10,10 @@ module {
     target: ?{ owner : Principal; subaccount : ?[Nat8] };
     amount : Nat;
   };
+  public type DropAccount = {
+    owner: Principal;
+    subaccount : ?[Nat8]
+  };
   public type MarkType =  {
     mark : Text;
     logoUrl : Text;

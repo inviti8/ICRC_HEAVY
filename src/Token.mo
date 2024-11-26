@@ -1234,6 +1234,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
       case(?drop){
         Map.delete(ephemeral_drops, thash, drop_id);
+        Map.delete(ephemeral_drop_accounts, thash, drop_id);
         Map.delete(ephemeral_drop_slots, thash, drop_id);
         Map.delete(ephemeral_drop_values, thash, drop_id);
         return true;
@@ -1371,12 +1372,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
   * Join Ephemeral Drop:
   *
-  * @param {Types.MintEphemeral} args The mint ephemeral arguments.
+  * @param {Types.DropAccount} args The mint account arguments.
   * @param {Text} mark The unique identifier for the drop.
   *
   * This method allows users to join an existing ephemeral drop. It first checks if the drop exists and that the user is not already a part of it. If all conditions are met, it updates the drop data accordingly.
   */
-  public shared func joinEphemeralDrop( args :Types.MintEphemeral, mark : Text ) : async ? Types.EphemeralDrop{
+  public shared func joinEphemeralDrop( args : Types.DropAccount, mark : Text ) : async ? Types.EphemeralDrop{
     switch (Map.get(ephemeral_drop_events, thash, mark)) {
       case(null){
           D.trap("Mark doesn't exist.");
@@ -1388,52 +1389,50 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             D.trap("Invalid slot.");
           };
           case(?slot){
-            switch(args.target){
+            let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
+
+            switch (Map.get(ephemeral_drop_event_dates, thash, event)) {
+
               case(null){
-                D.trap("All slots filled.");
+                D.trap("Drop target not found.");
               };
-              case(?target){
-                let key = _ephemeralDropKey(Principal.toText(target.owner), mark);
+              case(?d){
+                switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
 
-                switch (Map.get(ephemeral_drop_event_dates, thash, event)) {
-                  case(null){
-                    D.trap("Drop target not found.");
-                  };
-                  case(?d){
-                    switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
-                      case (null) {
-                        if(Nat.greater(slot, 0)){
-                          switch (Map.get(ephemeral_drop_values, thash, key)) {
-                            case(null){
-                              D.trap("Drop value not found.");
-                            };
-                            case(?val){
-                              if(_updateEphemeralDrop( key, d, slot, val, target.subaccount)){
-                                  ?{
-                                    event_id = event;
-                                    date = d;
-                                    drop_id = key;
-                                    slot = slot;
-                                    amount = val;
-                                  };
-                              }else{
-                                D.trap("Drop data update failed.");
-                              };
-                                    
-                            };
-                          };
-                                
-                        }else{
-                          D.trap("All slots filled.");
+                  case (null) {
+                    if(Nat.greater(slot, 0)){
+
+                      switch (Map.get(ephemeral_drop_values, thash, key)) {
+
+                        case(null){
+                          D.trap("Drop value not found.");
                         };
+                        case(?val){
                               
-                      };
-                      case (?val) {
-                        D.trap("Drop already exists.");
-                      };
+                          if(_updateEphemeralDrop( key, d, slot, val, args.subaccount)){
+                            ?{
+                              event_id = event;
+                              date = d;
+                              drop_id = key;
+                              slot = slot;
+                              amount = val;
+                            };
+                          }else{
+                            D.trap("Drop data update failed.");
+                          };
 
+                        };
+                      };
+                                
+                    }else{
+                      D.trap("All slots filled.");
                     };
+                              
                   };
+                  case (?val) {
+                    D.trap("Drop already exists.");
+                  };
+
                 };
               };
             };
