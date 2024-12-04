@@ -491,8 +491,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_principals = Map.new<Principal, Nat>(phash);
   let generator_accounts = Map.new<Nat, ?[Nat8]>(nhash);
   let generator_marks = Map.new<Principal, ?Text>(phash);
+  let mark_generators = Map.new<Text, Text>(thash);
   let mark_logos = Map.new<Text, Text>(thash);
   let marked_mint_balances = Map.new<Text, Nat>(thash);
+
+  let generations = Map.new<Text, Text>(thash);
+  stable var generationJoinCost : Nat = 8;
 
   stable var generatorMintedBalance : Nat = 0;
 
@@ -912,7 +916,15 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
             };
           };
           if(marked){
-            Map.set(generator_marks, phash, caller, Text.decodeUtf8(memo));//if coin is marked add memo to map
+            switch(Text.decodeUtf8(memo)){
+              case(null){
+                Map.set(generator_marks, phash, caller, Text.decodeUtf8(memo));//if coin is marked add memo to map
+              };
+              case(?mark){
+                Map.set(generator_marks, phash, caller, Text.decodeUtf8(memo));//if coin is marked add memo to map
+                Map.set(mark_generators, thash, mark, Principal.toText(caller));
+              };
+            };
           };
           block;
         };
@@ -1104,6 +1116,55 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       result;
   };
 
+  private func _burnTokens(caller : Principal, amount : Nat) : async ICRC2.TransferFromResponse {
+
+      var memo : Blob = Text.encodeUtf8("ORO-BURN");
+
+      // check balance
+      let balance = await this.icrc1_balance_of(
+        {
+          owner = caller;
+          subaccount = null;
+        }
+      );
+
+      if(balance < amount + oroFee){
+        D.trap("Not enough Balance");
+      };
+
+      let result = try{
+        await this.icrc2_transfer_from({
+            to = {
+              owner = Principal.fromActor(this);
+              subaccount = null;
+            };
+            fee = ?oroFee;
+            spender_subaccount = null;
+            from = {
+              owner = caller;
+              subaccount = null;
+            };
+            memo = ?memo;
+            created_at_time = ?time64();
+            amount = amount-oroFee;
+          });
+      } catch(e){
+        D.trap("cannot transfer from failed" # Error.message(e));
+      };
+
+      let block = switch(result){
+        case(#Ok(block)) {
+          ethTreasury -= (amount + oroFee);
+          block;
+        };
+        case(#Err(err)){
+          D.trap("cannot transfer from failed" # debug_show(err));
+        };
+      };
+
+      result;
+  };
+
   public query func isTokenFrozen() : async ? Bool{
     return do ? {
         Date.isFutureDate(dispensation);
@@ -1114,7 +1175,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     return Map.get(generator_principals, phash, args.owner);
   };
 
-  public query func getMarkLogo(mark : Text) : async ?Text{
+  public query func getGeneratorLogo(mark : Text) : async ?Text{
     return Map.get(mark_logos, thash, mark);
   };
 
@@ -1125,6 +1186,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   private func _isPngUrl(url : Text) : Bool {
     return (Text.startsWith(url, #text "https://" ) and Text.endsWith(url, #text ".png"))
+  };
+
+  private func _generationKey( acct : Text, moniker : Text ) : Text{
+    let delimit = moniker # "|";
+    return Text.concat(delimit, acct);
   };
 
   private func _dateType( acct : Text, mark : Text ) : ? Types.DateType{
@@ -1266,7 +1332,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 /**
  * Create Ephemeral Drop Event:
  *
- * @param {Nat} amount The amount of ckBTC to withdraw.
+ * @param {Nat} amount of Oro to be burned as payment for drop creation.
  * @param {Text} date The date of the event in the format 'YYYY-MM-DD HH:MM:SS.SSS'.
  * @param {Nat} dropValue The value of the drop in atomic units.
  * @param {Nat} slotCount The number of slots for the event.
@@ -1275,7 +1341,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
  *
  * This method allows authorized generators to create a new ephemeral drop event. It first checks if the caller is a valid generator. If not, it returns an error message. Then it verifies that the mark provided exists and that there is no existing drop event with the same mark. If all conditions are met, it burns the specified amount of tokens and creates a new drop event with the given parameters.
  */
-  public shared ({ caller }) func createEphemeralDropEvent( args : ICRC1.BurnArgs, date : Types.DateType, dropValue : Nat, slotCount : Nat, mark : Text, imgUrl : Text) : async ICRC1.TransferResult{
+  public shared ({ caller }) func createEphemeralDropEvent( amount : Nat, date : Types.DateType, dropValue : Nat, slotCount : Nat, mark : Text, imgUrl : Text) : async ICRC2.TransferFromResponse{
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {//must be a generator
       case (null) {
         D.trap("Unauthorized.");
@@ -1290,25 +1356,15 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               switch(Map.get(ephemeral_drop_events, thash, mark)){//event must not exist
                 case(null){
                   if(_isPngUrl(imgUrl)){
-                    if(args.amount >= Nat.mul(Nat.div(dropValue, 100), ephemeralDropCost)){
-                        switch( await*  icrc1().burn_tokens(caller, args, false)){
-                          case(#trappable(val)){
-                              D.trap("Something went wrong.");
-                          };
-                          case(#awaited(val)){
-                              let g = Source.Source();
-                              let uuid = UUID.toText(await g.new());
-                              let d = Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond);
-                              if(_updateDropEvent(mark, uuid, d, dropValue, slotCount, imgUrl)){
-                                val;
-                              }else{
-                                D.trap("Failed to update drop event data.");
-                              };
-                              
-                          };
-                          case(#err(#trappable(err))){D.trap(err)};
-                          case(#err(#awaited(err))){D.trap(err)};
-                        };
+                    if(amount >= Nat.mul(Nat.div(dropValue, 100), ephemeralDropCost)){
+                      let g = Source.Source();
+                      let uuid = UUID.toText(await g.new());
+                      let d = Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond);
+                      if(_updateDropEvent(mark, uuid, d, dropValue, slotCount, imgUrl)){
+                        return await _burnTokens(caller, amount);
+                      }else{
+                        D.trap("Failed to update drop event data.");
+                      };
                     }else{
                       D.trap("Burn amount is insufficient to create Drop Event.");
                     };
@@ -1644,6 +1700,49 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
     };
 
+  };
+
+  /**
+  * Join Generation:
+  *
+  * @param {ICRC1.Account} args The account to check.
+  * @param {Text} mark The unique identifier for the mint generator.
+  * @param {Text} moniker The unique identifier for the generation.
+  *
+  * This method joins a generation by verifying that the generation exists and that the account owns the generation. If all conditions are met, it burns tokens and updates the generation status; otherwise, it returns an error message.
+  */
+  public shared ({ caller }) func joinGeneration(args : ICRC1.Account, mark : Text, moniker : Text) : async ICRC2.TransferFromResponse{
+    switch (Map.get(mark_generators, thash, mark)){//generation mark must exist
+      case (null){
+        D.trap("Mark doesn't exist.");
+      };
+      case(?generator) {
+        let key = _generationKey(Principal.toText(args.owner), moniker);
+        switch (Map.get(generations, thash, key)){//generation moniker must not exist
+          case (null){
+            Map.set(generations, thash, key, mark);
+            return await _burnTokens(caller, generationJoinCost);
+          };
+          case(?m) {
+            D.trap("Moniker already exists.");
+          };
+        };
+      };
+    };
+
+  };
+
+  /**
+  * Check if Account is in Generation:
+  *
+  * @param {ICRC1.Account} args The account to check.
+  * @param {Text} moniker The unique identifier for the generation.
+  *
+  * This method checks whether an account is currently participating in a given generation. If it is, it returns the generation mark; otherwise, it returns an error message.
+  */
+  public query func isInGeneration(args : ICRC1.Account, moniker : Text)  : async ?Text{
+    let key = _generationKey(Principal.toText(args.owner), moniker);
+    return Map.get(generations, thash, key);
   };
 
   /**
