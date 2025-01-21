@@ -3,6 +3,7 @@ import Time "mo:base/Time";
 
 import DateTypes "DateTypes";
 import Components "mo:datetime/Components";
+import DateTime "mo:datetime/DateTime";
 
 module Date {
 
@@ -48,6 +49,25 @@ module Date {
         return false;
       }
     }
+  };
+
+  /**
+   * Add years from now, return as Date Components.
+   */
+  public func addYearsFromNow(years: Nat) : Date {
+    let now : Date = Components.fromTime(Time.now());
+    let dt = DateTime.fromComponents(now);
+
+    return dt.add(#years(years)).toComponents();
+  };
+
+  /**
+   * time left from now, until passed target date in nanoseconds.
+   */
+  public func timeLeft(date : Components.Components) : Time.Time {
+    let now = DateTime.fromComponents(Components.fromTime(Time.now()));
+    let target = DateTime.fromComponents(date);
+    return now.timeBetween(target);
   };
 
   /**

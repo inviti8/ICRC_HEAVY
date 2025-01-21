@@ -15,6 +15,7 @@ import Types "Types";
 import Blob "mo:base/Blob";
 import Error "mo:base/Error";
 import Int "mo:base/Int";
+import Int8 "mo:base/Int8";
 import Int32 "mo:base/Int32";
 import Nat64 "mo:base/Nat64";
 import Text "mo:base/Text";
@@ -45,7 +46,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 ) = this{
 
     let default_icrc1_args : ICRC1.InitArgs = {
-      name = ?"Oro";
+      name = ?"Oroboros";
       symbol = ?"XRO";
       logo = ?"data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InJlZCIvPjwvc3ZnPg==";
       decimals = 16;
@@ -431,7 +432,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var ckEthInflation : Nat = icpInflation*8;//subtracted with each new mint
   stable var ckBtcExchangeRate : Nat = icpExchangeRate*80;//640 oro for 1 ckBTC
   stable var ckBtcInflation : Nat = icpInflation*80;//subtracted with each new mint
-  stable var mintedCount : Nat = 0;
+  stable var generatorCount : Nat = 0;
 
   var tick = 0;
 
@@ -480,6 +481,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var ephemeralReward : Nat = 888_0000_0000_0000_0000;
   stable var ephemeralMintedBalance : Nat = 0;
   stable var ephemeralRewardCycle : Nat = 0;
+  stable var burnedBalance : Nat = 0;
   //stable var ephemeralMaxRewardCycles : Nat = 2522880000;//aproximately 80 years
   stable var ephemeralMaxRewardCycles : Nat = 80;//TEST
     //let ephemeralRewardInterval = 86400; // 1 day = 86400 sec
@@ -493,14 +495,29 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_marks = Map.new<Principal, ?Text>(phash);
   let mark_generators = Map.new<Text, Text>(thash);
   let mark_logos = Map.new<Text, Text>(thash);
-  let marked_mint_balances = Map.new<Text, Nat>(thash);
+  let mark_allocation_type = Map.new<Text, Text>(thash);
+  let mark_coin_allocation = Map.new<Text, Nat>(thash);
+  
 
   let generations = Map.new<Text, Text>(thash);
   stable var generationJoinCost : Nat = 8;
 
   stable var generatorMintedBalance : Nat = 0;
 
-  //minters who create a mark have ability to create token drop events & board posts at burn cost
+  //High Value Generator Allocations qualify for Benefactor Status
+  let benefactor_principals = Map.new<Principal, Nat>(phash);
+  let benefactor_accounts = Map.new<Nat, ?[Nat8]>(nhash);
+
+  //Generators can withdraw their allocation after the holding period minus the network fee.
+  stable var generatorHoldingPeriod : Nat = 126144000;//aproximately 5 years
+  stable var ICPNetworkFee : Nat = 10;//10%
+  stable var ETHNetworkFee : Nat = 3;//3%
+  stable var BTCNetworkFee : Nat = 1;//1%
+  stable var networkICPTake : Nat = 0;
+  stable var networkETHTake : Nat = 0;
+  stable var networkBTCTake : Nat = 0;
+
+  //minters who create a mark have ability to create token drop events at burn cost
   let ephemeral_drop_events = Map.new<Text, Text>(thash);
   let ephemeral_drop_event_dates = Map.new<Text, Text>(thash);
   let ephemeral_drop_event_values = Map.new<Text, Nat>(thash);
@@ -513,12 +530,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   //cost starts at 1/4 the value of the drop, so if you want to create a drop for 8 tokens you would need aprox. 10.75 tokens 
   stable var ephemeralDropCost : Nat = 25; 
   
-
-  let message_board = Map.new<Text, Text>(thash);
-  let message_board_urls = Map.new<Text, Text>(thash);
-  //cost to post message starts at 100% burn of tokens
-  stable var messageBoardCost : Nat = 100;
-
   /**
    * This method mints ephemeral tokens for a given account.
    *
@@ -561,9 +572,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
  */
   system func heartbeat() : async () {
     if (tick % ephemeralRewardInterval == 0) {
-      Debug.print("mintedCount = " # debug_show(mintedCount));
+      Debug.print("generatorCount = " # debug_show(generatorCount));
       Debug.print("maturity = " # debug_show(maturity));
-      if(mintedCount >= maturity){//at maturity ephemeral mint starts
+      if(generatorCount >= maturity){//at maturity ephemeral mint starts
         Debug.print("should do ephemeral mint!");
 
         if(ephemeralRewardCycle == 0){
@@ -641,7 +652,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     
     // Calculate the exchange rate based on the number of tokens minted
     var exchangeRate : Nat = icpExchangeRate;
-    if(mintedCount < maturity){//at maturity inflation stops
+    if(generatorCount < maturity){//at maturity inflation stops
       switch (args.coin) {
         case (#ICP){
           exchangeRate -= icpInflation;
@@ -663,7 +674,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     // Calculate the number of tokens to mint based on the exchange rate
     var mintingAmount : Nat = exchangeRate * (args.amount / 100_000_000);
     generatorMintedBalance := generatorMintedBalance + mintingAmount;
-    mintedCount := mintedCount + 1;
+    generatorCount := generatorCount + 1;
 
     let newtokens = await* icrc1().mint_tokens(Principal.fromActor(this), {
         to = switch(args.target){
@@ -728,6 +739,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       var memo : Blob = Text.encodeUtf8("UNMARKED");
       var marked : Bool = false;
+      var coin : Text = "ICP";
 
       // Add custom mark to coins
       switch (args.mintMark){
@@ -841,6 +853,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           let block = switch(result){
             case(#Ok(block)){
               ethTreasury := ethTreasury + args.amount - ethFee;
+              coin:="ETH";
               block;
             };
             case(#Err(err)){
@@ -892,6 +905,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           let block = switch(result){
             case(#Ok(block)){
               btcTreasury := btcTreasury + args.amount - btcFee;
+              coin:="BTC";
               block;
             };
             case(#Err(err)){
@@ -906,13 +920,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       let block = switch(result){
         case(#Ok(block)){
-          Map.set(generators, nhash, mintedCount, Principal.toText(caller));//Add minter to reconstruct
-          Map.set(generator_principals, phash, caller, mintedCount);//Add minter to list for ephemeral minting
-          Map.set(generator_accounts, nhash, mintedCount, args.source_subaccount);//Add minter to list for ephemeral minting
+          Map.set(generators, nhash, generatorCount, Principal.toText(caller));//Add minter to reconstruct
+          Map.set(generator_principals, phash, caller, generatorCount);//Add minter to list for ephemeral minting
+          Map.set(generator_accounts, nhash, generatorCount, args.source_subaccount);//Add minter to list for ephemeral minting
           switch(Text.decodeUtf8(memo)){
             case(null){};
             case(?mem){
-              Map.set(marked_mint_balances, thash, mem, args.amount);
+              Map.set(mark_allocation_type, thash, mem, coin);
+              Map.set(mark_coin_allocation, thash, mem, args.amount);
             };
           };
           if(marked){
@@ -926,6 +941,20 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
               };
             };
           };
+
+          switch (args.coin) {
+
+            case (#ICP){
+              networkICPTake := Nat.mul(Nat.div(args.amount, 100), ICPNetworkFee);
+            };
+            case (#ETH){
+              networkETHTake := Nat.mul(Nat.div(args.amount, 100), ETHNetworkFee);
+            };
+            case (#BTC){
+              networkBTCTake := Nat.mul(Nat.div(args.amount, 100), BTCNetworkFee);
+            };
+          };
+
           block;
         };
         case(#Err(err)){
@@ -1054,17 +1083,16 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   /**
    * Withdraw ckBTC tokens.
+   * This method allows the owner to withdraw a specified amount of ckBTC tokens from the canister.
+   * The method first checks if the caller is authorized. Then, it verifies that there are enough ckBTC
+   * tokens in the canister and that the withdrawal amount does not exceed the maximum allowed.
+   * If these conditions are met, the method transfers the specified amount of ckBTC to the caller,
+   * deducting the transfer fee from the canister's balance.
    *
    * @param {Nat} amount The amount of ckBTC to withdraw.
    * @return {CkBTCTypes.Result_2}
    */
   public shared ({ caller }) func withdrawCkBTC(amount : Nat) : async CkBTCTypes.Result_2 {
-
-      // Description: This method allows the owner to withdraw a specified amount of ckBTC tokens from the canister.
-      //              The method first checks if the caller is authorized. Then, it verifies that there are enough ckBTC
-      //              tokens in the canister and that the withdrawal amount does not exceed the maximum allowed.
-      //              If these conditions are met, the method transfers the specified amount of ckBTC to the caller,
-      //              deducting the transfer fee from the canister's balance.
 
       if(caller != owner){ D.trap("Unauthorized")};
 
@@ -1154,7 +1182,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       let block = switch(result){
         case(#Ok(block)) {
-          ethTreasury -= (amount + oroFee);
+          burnedBalance += (amount + oroFee);
           block;
         };
         case(#Err(err)){
@@ -1359,7 +1387,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
                     if(amount >= Nat.mul(Nat.div(dropValue, 100), ephemeralDropCost)){
                       let g = Source.Source();
                       let uuid = UUID.toText(await g.new());
-                      let d = Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond);
+                      let d = _dateTimeToText(date);
                       if(_updateDropEvent(mark, uuid, d, dropValue, slotCount, imgUrl)){
                         return await _burnTokens(caller, amount);
                       }else{
@@ -1384,6 +1412,22 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
     };
     
+  };
+
+  private func _dateTimeToText(date : Types.DateType) : Text {
+    return Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond)
+  };
+
+  private func _dateComponentsToText(date : Components.Components) : Text {
+    let dt : Types.DateType = {
+      year = Nat32.toNat(Nat32.fromIntWrap(date.year));
+      month = Nat32.toNat(Nat32.fromIntWrap(date.month));
+      day = Nat32.toNat(Nat32.fromIntWrap(date.day));
+      hour = Nat32.toNat(Nat32.fromIntWrap(date.hour));
+      minute = Nat32.toNat(Nat32.fromIntWrap(date.minute));
+      nanosecond = Nat32.toNat(Nat32.fromIntWrap(date.nanosecond));
+    };
+    return _dateTimeToText(dt);
   };
 
 /**
@@ -1877,8 +1921,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   *
   * This method retrieves and returns the total number of mints performed, providing insight into the overall minting activity.
   */
-  public query func getNumberOfMints() : async Nat{
-    return mintedCount;
+  public query func getNumberOfGenerators() : async Nat{
+    return generatorCount;
   };
 
   /**
@@ -1929,15 +1973,15 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   /**
-  * Retrieves the minted balance by mark for a given account.
+  * Retrieves the coin allocation by mark for a given account.
   *
   * This method retrieves and returns the minted balance for a specified mark, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
   *
   * @param {ICRC1.Account} args The account to retrieve the minted balance for.
   * @param {Text} mark The mark for which to retrieve the minted balance.
   */
-  public shared func mintedBalanceByMark(args : ICRC1.Account, mark : Text) : async Float{
-      switch (Map.get(marked_mint_balances, thash, mark)) {
+  public shared func coinAllocationByMark(args : ICRC1.Account, mark : Text) : async Float{
+      switch (Map.get(mark_coin_allocation, thash, mark)) {
         case (null) {
           D.trap("Mark doesn't exist.");
         };
@@ -1946,11 +1990,30 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         };
       };
   };
+
+   /**
+  * Retrieves the coin allocation type (ICP, ETH, BTC) by mark for a given account.
+  *
+  * This method retrieves and returns the generator token allocation typefor a specified mark, expressed as a string.
+  *
+  * @param {ICRC1.Account} args The account to retrieve the coin type.
+  * @param {Text} mark The mark for which to retrieve the coin type.
+  */
+  public shared func coinAllocationTypeByMark(args : ICRC1.Account, mark : Text) : async Text{
+      switch (Map.get(mark_allocation_type, thash, mark)) {
+        case (null) {
+          D.trap("Mark doesn't exist.");
+        };
+        case (?coin) {
+          return coin;
+        };
+      };
+  };
   
 /**
  * Retrieves the total ephemeral minted balance.
  *
- * This method retrieves and returns the total ephemeral minted balance, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+ * This method retrieves and returns the total ephemeral minted balance, expressed as a floating-point number.
  */
   public shared func totalEphemeralMintedBalance() : async Float{
     return Float.fromInt(ephemeralMintedBalance)
@@ -1959,10 +2022,37 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
    * Retrieves the total generator minted balance.
    *
-   * This method retrieves and returns the total generator minted balance, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+   * This method retrieves and returns the total generator minted balance, expressed as a floating-point number.
    */
   public shared func totalGeneratorMintedBalance() : async Float{
     return Float.fromInt(generatorMintedBalance)
+  };
+
+    /**
+   * Retrieves the total ICP Network take.
+   *
+   * This method retrieves and returns the total icp network take.
+   */
+  public shared func totalnetworkICPTake() : async Nat{
+    return networkICPTake
+  };
+
+    /**
+   * Retrieves the total ETH Network take.
+   *
+   * This method retrieves and returns the total eth network take.
+   */
+  public shared func totalnetworkETHTake() : async Nat{
+    return networkETHTake
+  };
+
+    /**
+   * Retrieves the total BTC Network take.
+   *
+   * This method retrieves and returns the total btc network take.
+   */
+  public shared func totalnetworkBTCTake() : async Nat{
+    return networkBTCTake
   };
 
   /**
