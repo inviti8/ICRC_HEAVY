@@ -507,14 +507,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   stable var generatorMintedBalance : Nat = 0;
 
-  //Generators can withdraw their allocation after the holding period minus the network fee.
-  stable var generatorHoldingPeriod : Nat = 5;
-  stable var ICPNetworkFee : Nat = 10;//10%
-  stable var ETHNetworkFee : Nat = 3;//3%
-  stable var BTCNetworkFee : Nat = 1;//1%
-  stable var networkICPTake : Nat = 0;
-  stable var networkETHTake : Nat = 0;
-  stable var networkBTCTake : Nat = 0;
+  //Generators can withdraw their allocation after the holding period minus the network take.
+  stable var generatorHoldingPeriod : Nat = 5;//5 years
+  stable var ICPNetworkTakePercentage : Nat = 10;//10%
+  stable var ETHNetworkTakePercentage : Nat = 3;//3%
+  stable var BTCNetworkTakePercentage : Nat = 1;//1%
+  stable var ICPNetworkTake : Nat = 0;
+  stable var ETHNetworkTake : Nat = 0;
+  stable var BTCNetworkTake : Nat = 0;
 
   //minters who create a mark have ability to create token drop events at burn cost
   let ephemeral_drop_events = Map.new<Text, Text>(thash);
@@ -948,13 +948,13 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
           switch (args.coin) {
 
             case (#ICP){
-              networkICPTake := Nat.mul(Nat.div(args.amount, 100), ICPNetworkFee);
+              ICPNetworkTake := Nat.mul(Nat.div(args.amount, 100), ICPNetworkTakePercentage);
             };
             case (#ETH){
-              networkETHTake := Nat.mul(Nat.div(args.amount, 100), ETHNetworkFee);
+              ETHNetworkTake := Nat.mul(Nat.div(args.amount, 100), ETHNetworkTakePercentage);
             };
             case (#BTC){
-              networkBTCTake := Nat.mul(Nat.div(args.amount, 100), BTCNetworkFee);
+              BTCNetworkTake := Nat.mul(Nat.div(args.amount, 100), BTCNetworkTakePercentage);
             };
           };
 
@@ -969,9 +969,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
 /**
- * Withdraw ICP tokens.
+ * Withdraw Generator Allocated ICP tokens.
  *
- * @param {Nat} amount The amount of ICP to withdraw.
+ * @param {Principal} principal that is trying to withdraw.
  * @return {ICPTypes.Result_2}
  */
  public shared func withdrawICPAllocation(caller : Principal) : async ICPTypes.Result_2 {
@@ -996,7 +996,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
               }else{
 
-                var networkTake : Nat = Nat.mul(Nat.div(val, 100), ICPNetworkFee);
+                var networkTake : Nat = Nat.mul(Nat.div(val, 100), ICPNetworkTakePercentage);
                 var alloc : Nat = val - networkTake;
                 let result = await _withdrawICP (caller, alloc);
 
@@ -1025,8 +1025,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   private func _withdrawICP(caller : Principal, amount : Nat) : async ICPTypes.Result_2 {
-    
-      if(caller != owner){ D.trap("Unauthorized")};
 
       let ICPLedger : ICPTypes.Service = actor(ICP_LEDGER);
       var memo : Blob = Text.encodeUtf8("ICP-OUT");
@@ -1046,7 +1044,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       let result = try{
         await ICPLedger.icrc2_transfer_from({
             to = {
-              owner = caller;//THIS MUST BE REPLACED WITH HARDCODED ADDRESS
+              owner = caller;
               subaccount = null;
             };
             fee = ?icpFee;
@@ -1079,7 +1077,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
    * Withdraw Generator Allocated ckETH tokens.
    *
-   * @param {Nat} amount The amount of ckETH to withdraw.
+   * @param {Principal} principal that is trying to withdraw.
    * @return {CkETHTypes.Result_2}
    */
   public shared func withdrawCkETHAllocation(caller : Principal) : async CkETHTypes.Result_2 {
@@ -1104,7 +1102,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
               }else{
 
-                var networkTake : Nat = Nat.mul(Nat.div(val, 100), ETHNetworkFee);
+                var networkTake : Nat = Nat.mul(Nat.div(val, 100), ETHNetworkTakePercentage);
                 var alloc : Nat = val - networkTake;
                 let result = await _withdrawCkETH (caller, alloc);
 
@@ -1134,8 +1132,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   private func _withdrawCkETH(caller : Principal, amount : Nat) : async CkETHTypes.Result_2 {
 
-      if(caller != owner){ D.trap("Unauthorized")};
-
       let ETHLedger : CkETHTypes.Service = actor(CK_ETH_LEDGER);
       var memo : Blob = Text.encodeUtf8("ckETH-OUT");
 
@@ -1154,7 +1150,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       let result = try{
         await ETHLedger.icrc2_transfer_from({
             to = {
-              owner = caller;//THIS MUST BE REPLACED WITH HARDCODED ADDRESS
+              owner = caller;
               subaccount = null;
             };
             fee = ?ethFee;
@@ -1187,7 +1183,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
    * Withdraw ckBTC tokens.
    *
-   * @param {Nat} amount The amount of ckBTC to withdraw.
+   * @param {Principal} principal that is trying to withdraw.
    * @return {CkBTCTypes.Result_2}
    */
   public shared func withdrawCkBTCAllocation(caller : Principal) : async CkBTCTypes.Result_2 {
@@ -1212,7 +1208,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
               }else{
 
-                var networkTake : Nat = Nat.mul(Nat.div(val, 100), BTCNetworkFee);
+                var networkTake : Nat = Nat.mul(Nat.div(val, 100), BTCNetworkTakePercentage);
                 var alloc : Nat = val - networkTake;
                 let result = await _withdrawCkBTC (caller, alloc);
 
@@ -1242,8 +1238,6 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   private func _withdrawCkBTC(caller : Principal, amount : Nat) : async CkBTCTypes.Result_2 {
 
-      if(caller != owner){ D.trap("Unauthorized")};
-
       let BTCLedger : CkBTCTypes.Service = actor(CK_BTC_LEDGER);
       var memo : Blob = Text.encodeUtf8("ckBTC-OUT");
 
@@ -1262,7 +1256,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       let result = try{
         await BTCLedger.icrc2_transfer_from({
             to = {
-              owner = caller;//THIS MUST BE REPLACED WITH HARDCODED ADDRESS
+              owner = caller;
               subaccount = null;
             };
             fee = ?btcFee;
@@ -1521,7 +1515,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
  *
  * This method allows authorized generators to create a new ephemeral drop event. It first checks if the caller is a valid generator. If not, it returns an error message. Then it verifies that the mark provided exists and that there is no existing drop event with the same mark. If all conditions are met, it burns the specified amount of tokens and creates a new drop event with the given parameters.
  */
-  public shared ({ caller }) func createEphemeralDropEvent( amount : Nat, date : Types.DateType, dropValue : Nat, slotCount : Nat, mark : Text, imgUrl : Text) : async ICRC2.TransferFromResponse{
+  public shared ({ caller }) func createEphemeralDropEvent( amount : Nat, date : Types.DateType, dropValue : Nat, slotCount : Nat, mark : Text, imgUrl : Text) : async ICRC2.TransferFromResponse {
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {//must be a generator
       case (null) {
         D.trap("Unauthorized.");
@@ -1617,7 +1611,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   private func _dateTimeToText(date : Types.DateType) : Text {
-    return Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond)
+    return Nat.toText(date.year) # "|" # Nat.toText(date.month) # "|" # Nat.toText(date.day) # "|" # Nat.toText(date.hour) # "|" # Nat.toText(date.minute) # "|" # Nat.toText(date.nanosecond);
   };
 
   private func _dateComponentsToText(date : Components.Components) : Text {
@@ -1641,7 +1635,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
  *
  * This method allows authorized generators to delete an ephemeral drop. It first checks if the caller is a valid generator and owns the mark associated with the drop. If not, it returns an error message. Then it verifies that the drop exists and that the target account matches the owner of the drop. If all conditions are met, it deletes the drop.
  */
-  public shared func deleteEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async Bool{
+  public shared func deleteEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async Bool {
     if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of drop
 
       switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be the owner of the mark
@@ -1679,7 +1673,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   *
   * This method allows users to join an existing ephemeral drop. It first checks if the drop exists and that the user is not already a part of it. If all conditions are met, it updates the drop data accordingly.
   */
-  public shared func joinEphemeralDrop( args : Types.DropAccount, mark : Text ) : async ? Types.EphemeralDrop{
+  public shared func joinEphemeralDrop( args : Types.DropAccount, mark : Text ) : async ? Types.EphemeralDrop {
     switch (Map.get(ephemeral_drop_events, thash, mark)) {
       case(null){
           D.trap("Mark doesn't exist.");
@@ -1753,7 +1747,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   *
   * This method retrieves the event ID associated with a given ephemeral drop mark. If no event exists, it returns an error message.
   */
-  public query func getEphemeralDropEventId( mark : Text ) : async Text{
+  public query func getEphemeralDropEventId( mark : Text ) : async Text {
     switch (Map.get(ephemeral_drop_events, thash, mark)) {
       case(null){
         return "No event found."
@@ -1772,7 +1766,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
  *
  * This method checks if an ephemeral drop is ready by verifying that it has a date in the future and that the account owns the drop. If all conditions are met, it returns True; otherwise, it returns False.
  */
-  public query func isEphemeralDropReady( args : ICRC1.Account, mark : Text ) : async Bool{
+  public query func isEphemeralDropReady( args : ICRC1.Account, mark : Text ) : async Bool {
     let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
 
     switch (Map.get(ephemeral_drops, thash, key)) {
@@ -1802,7 +1796,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   *
   * This method displays the date associated with a given ephemeral drop mark. If no date exists, it returns an error message.
   */
-  public query func showEphemeralDropDate( args : ICRC1.Account, mark : Text ) : async Text{
+  public query func showEphemeralDropDate( args : ICRC1.Account, mark : Text ) : async Text {
     let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
 
     switch (Map.get(ephemeral_drops, thash, key)) {
@@ -1898,7 +1892,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   *
   * @param {Text} mark The unique identifier for the drop.
   *
-  * This method collects an ephemeral drop by verifying that it exists, its date is in the past, and the account owns the drop. If all conditions are met, it mints tokens and updates the drop status; otherwise, it returns an error message.
+  * This method collects an ephemeral drop by verifying that it exists, 
+  * if its date is in the past, and the account owns the drop, 
+  * it mints tokens and updates the drop status; otherwise, it returns an error message.
   */
   public shared ({ caller }) func collectEphemeralDrop( mark : Text ) : async ICRC1.TransferResult {
     let key = _ephemeralDropKey(Principal.toText(caller), mark);
@@ -1955,9 +1951,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   * @param {Text} mark The unique identifier for the mint generator.
   * @param {Text} moniker The unique identifier for the generation.
   *
-  * This method joins a generation by verifying that the generation exists and that the account owns the generation. If all conditions are met, it burns tokens and updates the generation status; otherwise, it returns an error message.
+  * This method joins a generation by verifying that the generation exists 
+  * and that the account owns the generation. If all conditions are met, 
+  * it burns tokens and updates the generation status; otherwise, it returns an error message.
   */
-  public shared ({ caller }) func joinGeneration(args : ICRC1.Account, mark : Text, moniker : Text) : async ICRC2.TransferFromResponse{
+  public shared ({ caller }) func joinGeneration(args : ICRC1.Account, mark : Text, moniker : Text) : async ICRC2.TransferFromResponse {
     switch (Map.get(mark_generators, thash, mark)){//generation mark must exist
       case (null){
         D.trap("Mark doesn't exist.");
@@ -1984,9 +1982,10 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   * @param {ICRC1.Account} args The account to check.
   * @param {Text} moniker The unique identifier for the generation.
   *
-  * This method checks whether an account is currently participating in a given generation. If it is, it returns the generation mark; otherwise, it returns an error message.
+  * This method checks whether an account is currently participating in a given generation. 
+  * If it is, it returns the generation mark; otherwise, it returns an error message.
   */
-  public query func isInGeneration(args : ICRC1.Account, moniker : Text)  : async ?Text{
+  public query func isInGeneration(args : ICRC1.Account, moniker : Text)  : async ?Text {
     let key = _generationKey(Principal.toText(args.owner), moniker);
     return Map.get(generations, thash, key);
   };
@@ -1997,9 +1996,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   * @param {ICRC1.Account} args The account to set the logo for.
   * @param {Types.MarkType} markType The type of mark containing the logo URL.
   *
-  * This method sets a logo for a given mark, ensuring that only authorized accounts can perform this action and validating the format of the logo URL. If successful, it updates the map with the new logo; otherwise, it returns an error message.
+  * This method sets a logo for a given mark, ensuring that only authorized accounts 
+  * can perform this action and validating the format of the logo URL. If successful, 
+  * it updates the map with the new logo; otherwise, it returns an error message.
   */
-  public shared func setMarkLogo(args : ICRC1.Account, markType : Types.MarkType) : async Bool{
+  public shared func setMarkLogo(args : ICRC1.Account, markType : Types.MarkType) : async Bool {
     if(_isPngUrl(markType.logoUrl)){
 
       // Check if the account is authorized to set a logo for this mark
@@ -2026,7 +2027,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   *
   * @param {ICRC1.Account} args The account to check.
   *
-  * This method checks whether an account is authorized as a generator. It does this by searching the 'generators' map for the given owner's principal, returning true if found and false otherwise.
+  * This method checks whether an account is authorized as a generator. 
+  * It does this by searching the 'generators' map for the given owner's principal, 
+  * returning true if found and false otherwise.
   */
   public query func isGenerator(args : ICRC1.Account)  : async Bool{
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {
@@ -2150,7 +2153,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
   * Retrieves the balance of an account.
   *
-  * This method retrieves and returns the balance of a given account, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+  * This method retrieves and returns the balance of a given account, expressed as a floating-point number.
   *
   * @param {ICRC1.Account} args The account to retrieve the balance for.
   */
@@ -2167,7 +2170,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
   * Retrieves the total supply of tokens.
   *
-  * This method retrieves and returns the total supply of tokens, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+  * This method retrieves and returns the total supply of tokens, expressed as a floating-point number.
   */
   public shared func total_supply() : async Float{
     let balance = await icrc1_total_supply(); 
@@ -2177,7 +2180,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
   * Retrieves the coin allocation by mark for a given account.
   *
-  * This method retrieves and returns the minted balance for a specified mark, expressed as a floating-point number (i.e., in units of 0.000001 DAI).
+  * This method retrieves and returns the minted balance for a specified mark, expressed as a floating-point number.
   *
   * @param {ICRC1.Account} args The account to retrieve the minted balance for.
   * @param {Text} mark The mark for which to retrieve the minted balance.
@@ -2235,8 +2238,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
    *
    * This method retrieves and returns the total icp network take.
    */
-  public shared func totalnetworkICPTake() : async Nat{
-    return networkICPTake
+  public shared func totalICPNetworkTake() : async Nat{
+    return ICPNetworkTake
   };
 
     /**
@@ -2244,8 +2247,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
    *
    * This method retrieves and returns the total eth network take.
    */
-  public shared func totalnetworkETHTake() : async Nat{
-    return networkETHTake
+  public shared func totalETHNetworkTake() : async Nat{
+    return ETHNetworkTake
   };
 
     /**
@@ -2253,8 +2256,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
    *
    * This method retrieves and returns the total btc network take.
    */
-  public shared func totalnetworkBTCTake() : async Nat{
-    return networkBTCTake
+  public shared func totalBTCNetworkTake() : async Nat{
+    return BTCNetworkTake
   };
 
   /**
