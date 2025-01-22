@@ -425,6 +425,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     Nat64.fromNat(Int.abs(Time.now()));
   };
 
+  let CREATOR : Text = "cyh33-bfok5-yz4ko-wd2um-4b2tg-hv4cy-rhhkt-fcg6r-udgei-z526e-dae";//TEST ONLY!!!
+
   stable var icpExchangeRate : Nat = 80_000_000_000_000_000;//8 oro for 1 ICP
   //stable var icpInflation : Nat = 888_8888_8888;//subtracted with each new mint
   stable var icpInflation : Nat = 98_8888_8888_8888;//TEST
@@ -484,7 +486,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   stable var burnedBalance : Nat = 0;
   //stable var ephemeralMaxRewardCycles : Nat = 2522880000;//aproximately 80 years
   stable var ephemeralMaxRewardCycles : Nat = 80;//TEST
-    //let ephemeralRewardInterval = 86400; // 1 day = 86400 sec
+  //let ephemeralRewardInterval = 86400; // 1 day = 86400 sec
   let ephemeralRewardInterval = 88;//TEST
   let ephemeralAllocationSet = 10;
 
@@ -969,6 +971,29 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
 /**
+ * Withdraw Network Take ICP tokens.
+ *
+ * @param {Principal} principal that is trying to withdraw.
+ * @return {ICPTypes.Result_2}
+ */
+ public shared func withdrawICPNetworkTake(caller : Principal, amount : Nat) : async ICPTypes.Result_2 {
+  if(Principal.toText(caller) != CREATOR){D.trap("Unauthorized.");};
+  if(amount > ICPNetworkTake){D.trap("Insufficient balance available for network take.");};
+
+    let result = await _withdrawICP (caller, amount);
+
+    let block = switch(result){
+
+      case(#Ok(block)) {
+        return result;
+      };
+      case(#Err(err)){
+        D.trap("Cannot withdraw network take." # debug_show(err));
+      };
+    };
+ };
+
+/**
  * Withdraw Generator Allocated ICP tokens.
  *
  * @param {Principal} principal that is trying to withdraw.
@@ -1073,6 +1098,29 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       result;
   };
+
+/**
+ * Withdraw Network Take ETH tokens.
+ *
+ * @param {Principal} principal that is trying to withdraw.
+ * @return {CkETHTypes.Result_2}
+ */
+ public shared func withdrawCkETHNetworkTake(caller : Principal, amount : Nat) : async CkETHTypes.Result_2 {
+  if(Principal.toText(caller) != CREATOR){D.trap("Unauthorized.");};
+  if(amount > ICPNetworkTake){D.trap("Insufficient balance available for network take.");};
+
+    let result = await _withdrawCkETH (caller, amount);
+
+    let block = switch(result){
+
+      case(#Ok(block)) {
+        return result;
+      };
+      case(#Err(err)){
+        D.trap("Cannot withdraw network take." # debug_show(err));
+      };
+    };
+ };
 
   /**
    * Withdraw Generator Allocated ckETH tokens.
@@ -1179,6 +1227,29 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       result;
   };
+
+  /**
+ * Withdraw Network Take BTC tokens.
+ *
+ * @param {Principal} principal that is trying to withdraw.
+ * @return {CkETHTypes.Result_2}
+ */
+ public shared func withdrawCkBTCNetworkTake(caller : Principal, amount : Nat) : async CkBTCTypes.Result_2 {
+  if(Principal.toText(caller) != CREATOR){D.trap("Unauthorized.");};
+  if(amount > ICPNetworkTake){D.trap("Insufficient balance available for network take.");};
+
+    let result = await _withdrawCkBTC (caller, amount);
+
+    let block = switch(result){
+
+      case(#Ok(block)) {
+        return result;
+      };
+      case(#Err(err)){
+        D.trap("Cannot withdraw network take." # debug_show(err));
+      };
+    };
+ };
 
   /**
    * Withdraw ckBTC tokens.
