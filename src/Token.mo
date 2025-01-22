@@ -493,6 +493,9 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   let generator_principals = Map.new<Principal, Nat>(phash);
   let generator_accounts = Map.new<Nat, ?[Nat8]>(nhash);
   let generator_marks = Map.new<Principal, ?Text>(phash);
+  let generator_coin_allocation = Map.new<Principal, Nat>(phash);
+  let generator_allocation_type = Map.new<Principal, Text>(phash);
+  let generator_holding_periods = Map.new<Principal, Text>(phash);
   let mark_generators = Map.new<Text, Text>(thash);
   let mark_logos = Map.new<Text, Text>(thash);
   let mark_allocation_type = Map.new<Text, Text>(thash);
@@ -504,12 +507,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   stable var generatorMintedBalance : Nat = 0;
 
-  //High Value Generator Allocations qualify for Benefactor Status
-  let benefactor_principals = Map.new<Principal, Nat>(phash);
-  let benefactor_accounts = Map.new<Nat, ?[Nat8]>(nhash);
-
   //Generators can withdraw their allocation after the holding period minus the network fee.
-  stable var generatorHoldingPeriod : Nat = 126144000;//aproximately 5 years
+  stable var generatorHoldingPeriod : Nat = 5;
   stable var ICPNetworkFee : Nat = 10;//10%
   stable var ETHNetworkFee : Nat = 3;//3%
   stable var BTCNetworkFee : Nat = 1;//1%
@@ -920,9 +919,13 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
       let block = switch(result){
         case(#Ok(block)){
+          var unlockDate : Components.Components = Date.addYearsFromNow(generatorHoldingPeriod);
           Map.set(generators, nhash, generatorCount, Principal.toText(caller));//Add minter to reconstruct
           Map.set(generator_principals, phash, caller, generatorCount);//Add minter to list for ephemeral minting
           Map.set(generator_accounts, nhash, generatorCount, args.source_subaccount);//Add minter to list for ephemeral minting
+          Map.set(generator_coin_allocation, phash, caller, args.amount);//Add minter to list for ephemeral minting
+          Map.set(generator_allocation_type, phash, caller, coin);//Add coin type to map
+          Map.set(generator_holding_periods, phash, caller, _dateComponentsToText(unlockDate));//Add holding period to map
           switch(Text.decodeUtf8(memo)){
             case(null){};
             case(?mem){
@@ -971,7 +974,57 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
  * @param {Nat} amount The amount of ICP to withdraw.
  * @return {ICPTypes.Result_2}
  */
-  public shared ({ caller }) func withdrawICP(amount : Nat) : async ICPTypes.Result_2 {
+ public shared func withdrawICPAllocation(caller : Principal) : async ICPTypes.Result_2 {
+    if(_holdingPeriodComplete(caller) == false){ D.trap("Unauthorized, holding period is not complete.")};
+    switch(Map.get(generator_allocation_type, phash, caller)){
+      case(null){
+         D.trap("Unauthorized, no allocation found.");
+       };
+      case(?coin){
+        if(coin == "ICP"){
+
+          switch(Map.get(generator_coin_allocation, phash, caller)){
+            case(null){
+
+              D.trap("Unauthorized, no allocation found.");
+              
+            };
+            case(?val){
+              if(val==0){
+
+                D.trap("Unauthorized, insuffiecient allocation.");
+
+              }else{
+
+                var networkTake : Nat = Nat.mul(Nat.div(val, 100), ICPNetworkFee);
+                var alloc : Nat = val - networkTake;
+                let result = await _withdrawICP (caller, alloc);
+
+                let block = switch(result){
+
+                  case(#Ok(block)) {
+                    _updateGeneratorAllocation(caller, 0);
+                    return result;
+                  };
+                  case(#Err(err)){
+                    D.trap("Cannot withdraw allocation." # debug_show(err));
+                  };
+                };
+                
+              };
+            };
+          };
+
+        }else{
+          D.trap("Unauthorized, invalid allocation type.");
+        };
+
+      };
+    };
+    
+  };
+
+  private func _withdrawICP(caller : Principal, amount : Nat) : async ICPTypes.Result_2 {
     
       if(caller != owner){ D.trap("Unauthorized")};
 
@@ -1024,12 +1077,62 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   /**
-   * Withdraw ckETH tokens.
+   * Withdraw Generator Allocated ckETH tokens.
    *
    * @param {Nat} amount The amount of ckETH to withdraw.
    * @return {CkETHTypes.Result_2}
    */
-  public shared ({ caller }) func withdrawCkETH(amount : Nat) : async CkETHTypes.Result_2 {
+  public shared func withdrawCkETHAllocation(caller : Principal) : async CkETHTypes.Result_2 {
+    if(_holdingPeriodComplete(caller) == false){ D.trap("Unauthorized, holding period is not complete.")};
+    switch(Map.get(generator_allocation_type, phash, caller)){
+      case(null){
+         D.trap("Unauthorized, no allocation found.");
+       };
+      case(?coin){
+        if(coin == "ETH"){
+
+          switch(Map.get(generator_coin_allocation, phash, caller)){
+            case(null){
+
+              D.trap("Unauthorized, no allocation found.");
+
+            };
+            case(?val){
+              if(val==0){
+
+                D.trap("Unauthorized, insuffiecient allocation.");
+
+              }else{
+
+                var networkTake : Nat = Nat.mul(Nat.div(val, 100), ETHNetworkFee);
+                var alloc : Nat = val - networkTake;
+                let result = await _withdrawCkETH (caller, alloc);
+
+                let block = switch(result){
+
+                  case(#Ok(block)) {
+                    _updateGeneratorAllocation(caller, 0);
+                    return result;
+                  };
+                  case(#Err(err)){
+                    D.trap("Cannot withdraw allocation." # debug_show(err));
+                  };
+                };
+                
+              };
+            };
+          };
+
+        }else{
+          D.trap("Unauthorized, invalid allocation type.");
+        };
+
+      };
+    };
+    
+  };
+
+  private func _withdrawCkETH(caller : Principal, amount : Nat) : async CkETHTypes.Result_2 {
 
       if(caller != owner){ D.trap("Unauthorized")};
 
@@ -1083,16 +1186,61 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 
   /**
    * Withdraw ckBTC tokens.
-   * This method allows the owner to withdraw a specified amount of ckBTC tokens from the canister.
-   * The method first checks if the caller is authorized. Then, it verifies that there are enough ckBTC
-   * tokens in the canister and that the withdrawal amount does not exceed the maximum allowed.
-   * If these conditions are met, the method transfers the specified amount of ckBTC to the caller,
-   * deducting the transfer fee from the canister's balance.
    *
    * @param {Nat} amount The amount of ckBTC to withdraw.
    * @return {CkBTCTypes.Result_2}
    */
-  public shared ({ caller }) func withdrawCkBTC(amount : Nat) : async CkBTCTypes.Result_2 {
+  public shared func withdrawCkBTCAllocation(caller : Principal) : async CkBTCTypes.Result_2 {
+    if(_holdingPeriodComplete(caller) == false){ D.trap("Unauthorized, holding period is not complete.")};
+    switch(Map.get(generator_allocation_type, phash, caller)){
+      case(null){
+         D.trap("Unauthorized, no allocation found.");
+       };
+      case(?coin){
+        if(coin == "BTC"){
+
+          switch(Map.get(generator_coin_allocation, phash, caller)){
+            case(null){
+
+              D.trap("Unauthorized, no allocation found.");
+
+            };
+            case(?val){
+              if(val==0){
+
+                D.trap("Unauthorized, insuffiecient allocation.");
+
+              }else{
+
+                var networkTake : Nat = Nat.mul(Nat.div(val, 100), BTCNetworkFee);
+                var alloc : Nat = val - networkTake;
+                let result = await _withdrawCkBTC (caller, alloc);
+
+                let block = switch(result){
+
+                  case(#Ok(block)) {
+                    _updateGeneratorAllocation(caller, 0);
+                    return result;
+                  };
+                  case(#Err(err)){
+                    D.trap("Cannot withdraw allocation." # debug_show(err));
+                  };
+                };
+                
+              };
+            };
+          };
+
+        }else{
+          D.trap("Unauthorized, invalid allocation type.");
+        };
+
+      };
+    };
+    
+  };
+
+  private func _withdrawCkBTC(caller : Principal, amount : Nat) : async CkBTCTypes.Result_2 {
 
       if(caller != owner){ D.trap("Unauthorized")};
 
@@ -1142,6 +1290,21 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
 
       result;
+  };
+
+  private func _updateGeneratorAllocation(caller : Principal, value : Nat) {
+    Map.set(generator_coin_allocation, phash, caller, value);
+      switch (Map.get(generator_marks, phash, caller)){
+        case (null){};
+        case(?mark) {
+          switch(mark){
+            case(null){};
+            case(?m){
+              Map.set(mark_coin_allocation, thash, m, value);
+            };
+          };
+        };
+    };
   };
 
   private func _burnTokens(caller : Principal, amount : Nat) : async ICRC2.TransferFromResponse {
@@ -1229,48 +1392,37 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         return null;
       };
       case (?val) {
-        let arr = Iter.toArray(Text.split(val, #char '|'));
-        switch(Nat.fromText(arr[0])){
-          case(null){return null};
-          case(?year){
-            switch(Nat.fromText(arr[1])){
-              case(null){return null};
-              case(?month){
-                switch(Nat.fromText(arr[2])){
-                  case(null){return null};
-                  case(?day){
-                    switch(Nat.fromText(arr[3])){
-                      case(null){return null};
-                      case(?hour){
-                        switch(Nat.fromText(arr[4])){
-                          case(null){return null};
-                          case(?minute){
-                            switch(Nat.fromText(arr[0])){
-                              case(null){return null};
-                              case(?nanosecond){
-                                ? {
-                                  year = year;
-                                  month = month;
-                                  day = day;
-                                  hour = hour;
-                                  minute = minute;
-                                  nanosecond = nanosecond;
-                                };
-                              };
-                            };
-                          };
-                        };
-                      };
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
+        return _textToDateType(val);
       };
     };
 
+  };
+
+  private func _holdingPeriodComplete(caller : Principal) : Bool {
+    switch (Map.get(generator_holding_periods, phash, caller)){
+      case (null){
+          return false;
+      };
+      case(?datetxt) {
+
+        switch(_textToDateType(datetxt)){
+          case(null){
+              return false;
+          };
+          case(?date){
+
+            if(Date.isFutureDate(date) == false){
+              return false;
+            }else{
+              return true;
+            };
+
+          };
+              
+        };
+          
+        };
+    };
   };
 
   private func _deleteDropEvent(mark : Text) : Bool {
@@ -1412,6 +1564,56 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       };
     };
     
+  };
+
+  private func _textToDateType(text : Text) : ?Types.DateType {
+
+    let arr = Iter.toArray(Text.split(text, #char '|'));
+    let size = Array.size(arr);
+
+    if(size != 6){
+      return null;
+    };
+
+    return switch(Nat.fromText(arr[0])){
+      case(null){return null};
+      case(?year){
+        switch(Nat.fromText(arr[1])){
+          case(null){return null};
+          case(?month){
+            switch(Nat.fromText(arr[2])){
+              case(null){return null};
+              case(?day){
+                switch(Nat.fromText(arr[3])){
+                  case(null){return null};
+                  case(?hour){
+                    switch(Nat.fromText(arr[4])){
+                      case(null){return null};
+                      case(?minute){
+                        switch(Nat.fromText(arr[5])){
+                          case(null){return null};
+                          case(?nanosecond){
+                            ? {
+                                year = year;
+                                month = month;
+                                day = day;
+                                hour = hour;
+                                minute = minute;
+                                nanosecond = nanosecond;
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+
   };
 
   private func _dateTimeToText(date : Types.DateType) : Text {
@@ -1840,7 +2042,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
   * Retrieve the minimum ICP tokens required for a drop.
   *
-  * This method retrieves and returns the minimum ICP tokens required for a drop, expressed as a floating-point number (i.e., in units of 0.000001 ICP).
+  * This method retrieves and returns the minimum ICP tokens required for a drop, expressed as a floating-point number.
   */
   public query func icpMinimumTokensRequired() : async Float{
     return Float.fromInt(icpMinimum / 100_000_000);
@@ -1849,7 +2051,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
   * Retrieve the current ICP exchange rate.
   *
-  * This method retrieves and returns the current ICP exchange rate, expressed as a floating-point number (i.e., in units of 0.000001 ICP per DAI).
+  * This method retrieves and returns the current ICP exchange rate, expressed as a floating-point number).
   */
   public query func getIcpExchangeRate() : async Float{
     return Float.fromInt(icpExchangeRate / 10_000_000_000_000_000);
@@ -1858,7 +2060,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
   * Retrieve the total amount of ICP tokens collected in the treasury.
   *
-  * This method retrieves and returns the total amount of ICP tokens collected in the treasury, expressed as a floating-point number (i.e., in units of 0.000001 ICP).
+  * This method retrieves and returns the total amount of ICP tokens collected in the treasury, expressed as a floating-point number.
   */
   public query func icpTreasuryTotalCollected() : async Float{
     return Float.fromInt(icpTreasury / 100_000_000);
@@ -1867,7 +2069,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
    * Retrieve the minimum ETH tokens required for a drop.
    *
-   * @return The minimum ETH tokens required for a drop, expressed as a floating-point number (i.e., in units of 0.000001 ETH).
+   * @return The minimum ETH tokens required for a drop, expressed as a floating-point number.
    */
   public query func ethMinimumTokensRequired() : async Float{
     return Float.fromInt(ethMinimum / 100_000_000);
@@ -1876,7 +2078,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
   * Retrieve the current CK-ETH exchange rate.
   *
-  * This method retrieves and returns the current CK-ETH exchange rate, expressed as a floating-point number (i.e., in units of 0.000001 ETH per DAI).
+  * This method retrieves and returns the current CK-ETH exchange rate, expressed as a floating-point number.
   */
   public query func getckEthExchangeRate() : async Float{
     return Float.fromInt(ckEthExchangeRate / 10_000_000_000_000_000);
@@ -1885,7 +2087,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
    * Retrieve the total amount of ETH tokens collected in the treasury.
    *
-   * @return The total amount of ETH tokens collected in the treasury, expressed as a floating-point number (i.e., in units of 0.000001 ETH).
+   * @return The total amount of ETH tokens collected in the treasury, expressed as a floating-point number.
    */
   public query func ethTreasuryTotalCollected() : async Float{
     return Float.fromInt(ethTreasury / 100_000_000);
@@ -1894,14 +2096,14 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
    * Retrieve the minimum Bitcoin tokens required for a drop.
    *
-   * This method retrieves and returns the minimum Bitcoin tokens required for a drop, expressed as a floating-point number (i.e., in units of 0.000001 BTC).
+   * This method retrieves and returns the minimum Bitcoin tokens required for a drop, expressed as a floating-point number.
    */
   public query func btcMinimumTokensRequired() : async Float{
     return Float.fromInt(btcMinimum / 100_000_000);
   };
   /**
   *
-  * This method retrieves and returns the current CK-BTC exchange rate, expressed as a floating-point number (i.e., in units of 0.000001 BTC per DAI).
+  * This method retrieves and returns the current CK-BTC exchange rate, expressed as a floating-point number
   */
   public query func getckBtcExchangeRate() : async Float{
     return Float.fromInt(ckBtcExchangeRate / 10_000_000_000_000_000);
@@ -1910,7 +2112,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
    * Retrieve the total amount of Bitcoin tokens collected in the treasury.
    *
-   * @return The total amount of Bitcoin tokens collected in the treasury, expressed as a floating-point number (i.e., in units of 0.000001 BTC).
+   * @return The total amount of Bitcoin tokens collected in the treasury, expressed as a floating-point number.
    */
   public query func btcTreasuryTotalCollected() : async Float{
     return Float.fromInt(btcTreasury / 100_000_000);
