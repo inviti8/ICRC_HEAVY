@@ -971,7 +971,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
 /**
- * Withdraw Network Take ICP tokens.
+ * Withdraw Network Take of ICP tokens. Only the authorized Creator can call this function.
  *
  * @param {Principal} principal that is trying to withdraw.
  * @return {ICPTypes.Result_2}
@@ -994,7 +994,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
  };
 
 /**
- * Withdraw Generator Allocated ICP tokens.
+ * Withdraw Generator Allocated ICP tokens.  The Generators
+ *  holding period must be complete in order to withdraw.
  *
  * @param {Principal} principal that is trying to withdraw.
  * @return {ICPTypes.Result_2}
@@ -1421,17 +1422,34 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
       result;
   };
 
-  public query func isTokenFrozen() : async ? Bool{
-    return do ? {
-        Date.isFutureDate(dispensation);
+  /**
+  * Check if tokens are frozen.
+  *
+  * @return {bool} Whether the tokens are frozen or not
+  */
+  public query func isTokenFrozen() : async ?Bool {
+    return do ?{
+      Date.isFutureDate(dispensation)
     };
   };
 
-  public query func getGeneratorEpoch(args : ICRC1.Account) : async ?Nat{
+  /**
+  * Get generator epoch.
+  *
+  * @param {ICRC1.Account} account
+  * @return {?Nat}
+  */
+  public query func getGeneratorEpoch(args : ICRC1.Account) : async ?Nat {
     return Map.get(generator_principals, phash, args.owner);
   };
 
-  public query func getGeneratorLogo(mark : Text) : async ?Text{
+  /**
+   * Get generator logo.
+   *
+   * @param {Text} mark
+   * @return {?Text}
+   */
+  public query func getGeneratorLogo(mark : Text) : async ?Text {
     return Map.get(mark_logos, thash, mark);
   };
 
@@ -1554,7 +1572,18 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
     
   };
 
-  public shared func deleteEphemeralDropEvent( args : ICRC1.Account, mark : Text) : async Bool{
+/**
+ * Delete Ephemeral Drop Event:
+ *
+ * @param {ICRC1.Account} account
+ * @param {Text} mark The unique identifier for the event.
+ *
+ * This method allows authorized generators to delete a specific ephemeral drop event.
+ * It first checks if the caller is a valid generator. If not, it returns an error message.
+ * Then it verifies that the mark provided exists and that there is no existing drop event
+ * with the same mark. If all conditions are met, it deletes the specified drop event.
+ */
+public shared func deleteEphemeralDropEvent(args : ICRC1.Account, mark : Text) : async Bool{
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(args.owner) })) {//must be a generator
       case (null) {
           return false;
@@ -1572,7 +1601,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
         
       };
     };
-  };
+};
 
 /**
  * Create Ephemeral Drop Event:
@@ -1584,7 +1613,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
  * @param {Text} mark The unique identifier for the event.
  * @param {Text} imgUrl The URL of the image associated with the event.
  *
- * This method allows authorized generators to create a new ephemeral drop event. It first checks if the caller is a valid generator. If not, it returns an error message. Then it verifies that the mark provided exists and that there is no existing drop event with the same mark. If all conditions are met, it burns the specified amount of tokens and creates a new drop event with the given parameters.
+ * This method allows authorized generators to create a new ephemeral drop event. 
+ * It first checks if the caller is a valid generator. If not, it returns an error message.
+ * Then it verifies that the mark provided exists and that there is no existing drop event
+ * with the same mark. If all conditions are met, it burns the specified amount of tokens
+ *  and creates a new drop event with the given parameters.
  */
   public shared ({ caller }) func createEphemeralDropEvent( amount : Nat, date : Types.DateType, dropValue : Nat, slotCount : Nat, mark : Text, imgUrl : Text) : async ICRC2.TransferFromResponse {
     switch (Map.find<Nat, Text>(generators, func(key, value) { value == Principal.toText(caller) })) {//must be a generator
@@ -1704,7 +1737,11 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
  * @param {Text} mark The unique identifier for the drop.
  * @param {Text} targetAcct The target account that should own the drop.
  *
- * This method allows authorized generators to delete an ephemeral drop. It first checks if the caller is a valid generator and owns the mark associated with the drop. If not, it returns an error message. Then it verifies that the drop exists and that the target account matches the owner of the drop. If all conditions are met, it deletes the drop.
+ * This method allows authorized generators to delete an ephemeral drop. 
+ * It first checks if the caller is a valid generator and owns the mark associated 
+ * with the drop. If not, it returns an error message. Then it verifies that the 
+ * drop exists and that the target account matches the owner of the drop. 
+ * If all conditions are met, it deletes the drop.
  */
   public shared func deleteEphemeralDrop( args : ICRC1.Account, mark : Text, targetAcct : Text ) : async Bool {
     if(targetAcct != Principal.toText(args.owner)){//target account cannot be the creator of drop
@@ -1742,73 +1779,84 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   * @param {Types.DropAccount} args The mint account arguments.
   * @param {Text} mark The unique identifier for the drop.
   *
-  * This method allows users to join an existing ephemeral drop. It first checks if the drop exists and that the user is not already a part of it. If all conditions are met, it updates the drop data accordingly.
+  * This method allows users to join an existing ephemeral drop. It first checks if
+  the drop exists and that the user is not already a part of it. If all conditions
+  are met, it updates the drop data accordingly.
   */
   public shared func joinEphemeralDrop( args : Types.DropAccount, mark : Text ) : async ? Types.EphemeralDrop {
-    switch (Map.get(ephemeral_drop_events, thash, mark)) {
+
+    switch (Map.get(generations, thash, Principal.toText(args.owner))) {
       case(null){
-          D.trap("Mark doesn't exist.");
-        };
-      case(?event){
-
-        switch (Map.get(ephemeral_drop_event_slots, thash, event)) {
+        D.trap("Not in generation, Unauthorized.");
+      };
+      case(?gen){
+        switch (Map.get(ephemeral_drop_events, thash, mark)) {
           case(null){
-            D.trap("Invalid slot.");
-          };
-          case(?slot){
-            let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
+              D.trap("Mark doesn't exist.");
+            };
+          case(?event){
 
-            switch (Map.get(ephemeral_drop_event_dates, thash, event)) {
-
+            switch (Map.get(ephemeral_drop_event_slots, thash, event)) {
               case(null){
-                D.trap("Drop target not found.");
+                D.trap("Invalid slot.");
               };
-              case(?d){
-                switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
+              case(?slot){
+                let key = _ephemeralDropKey(Principal.toText(args.owner), mark);
 
-                  case (null) {
-                    if(Nat.greater(slot, 0)){
+                switch (Map.get(ephemeral_drop_event_dates, thash, event)) {
 
-                      switch (Map.get(ephemeral_drop_values, thash, key)) {
+                  case(null){
+                    D.trap("Drop target not found.");
+                  };
+                  case(?d){
+                    switch (Map.get(ephemeral_drops, thash, key)) {//drop must not exist
 
-                        case(null){
-                          D.trap("Drop value not found.");
-                        };
-                        case(?val){
-                              
-                          if(_updateEphemeralDrop( key, d, slot, val, args.subaccount)){
-                            ?{
-                              event_id = event;
-                              date = d;
-                              drop_id = key;
-                              slot = slot;
-                              amount = val;
+                      case (null) {
+                        if(Nat.greater(slot, 0)){
+
+                          switch (Map.get(ephemeral_drop_values, thash, key)) {
+
+                            case(null){
+                              D.trap("Drop value not found.");
                             };
-                          }else{
-                            D.trap("Drop data update failed.");
+                            case(?val){
+                                  
+                              if(_updateEphemeralDrop( key, d, slot, val, args.subaccount)){
+                                ?{
+                                  event_id = event;
+                                  date = d;
+                                  drop_id = key;
+                                  slot = slot;
+                                  amount = val;
+                                };
+                              }else{
+                                D.trap("Drop data update failed.");
+                              };
+
+                            };
                           };
-
+                                    
+                        }else{
+                          D.trap("All slots filled.");
                         };
+                                  
                       };
-                                
-                    }else{
-                      D.trap("All slots filled.");
-                    };
-                              
-                  };
-                  case (?val) {
-                    D.trap("Drop already exists.");
-                  };
+                      case (?val) {
+                        D.trap("Drop already exists.");
+                      };
 
+                    };
+                  };
                 };
+                
               };
             };
-            
+                  
           };
         };
-              
       };
     };
+    
   };
 
   /**
@@ -2016,7 +2064,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   /**
-  * Join Generation:
+  * Creates a unique sub-namespace(moniker), that exists under the specified generator mark.
   *
   * @param {ICRC1.Account} args The account to check.
   * @param {Text} mark The unique identifier for the mint generator.
@@ -2048,7 +2096,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   /**
-  * Check if Account is in Generation:
+  * Check if Account is in Generation.
   *
   * @param {ICRC1.Account} args The account to check.
   * @param {Text} moniker The unique identifier for the generation.
@@ -2062,7 +2110,8 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   /**
-  * Set Mark Logo:
+  * Update the logo url for a given Mark. Hook for generators to
+  * update their existing logo image if needed.
   *
   * @param {ICRC1.Account} args The account to set the logo for.
   * @param {Types.MarkType} markType The type of mark containing the logo URL.
@@ -2071,7 +2120,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   * can perform this action and validating the format of the logo URL. If successful, 
   * it updates the map with the new logo; otherwise, it returns an error message.
   */
-  public shared func setMarkLogo(args : ICRC1.Account, markType : Types.MarkType) : async Bool {
+  public shared func updateGeneratorLogo(args : ICRC1.Account, markType : Types.MarkType) : async Bool {
     if(_isPngUrl(markType.logoUrl)){
 
       // Check if the account is authorized to set a logo for this mark
@@ -2094,12 +2143,12 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   /**
-  * Check if account is a generator:
+  * Check if account is a generator.
   *
   * @param {ICRC1.Account} args The account to check.
   *
-  * This method checks whether an account is authorized as a generator. 
-  * It does this by searching the 'generators' map for the given owner's principal, 
+  * This method checks whether an account is authorized as a generator.
+  * It does this by searching the 'generators' map for the given owner's principal,
   * returning true if found and false otherwise.
   */
   public query func isGenerator(args : ICRC1.Account)  : async Bool{
@@ -2118,25 +2167,25 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   *
   * This method retrieves and returns the minimum ICP tokens required for a drop, expressed as a floating-point number.
   */
-  public query func icpMinimumTokensRequired() : async Float{
+  public query func icpMinimumTokensRequiredForDrop() : async Float{
     return Float.fromInt(icpMinimum / 100_000_000);
   };
 
   /**
   * Retrieve the current ICP exchange rate.
   *
-  * This method retrieves and returns the current ICP exchange rate, expressed as a floating-point number).
+  * This method retrieves and returns the current ICP exchange rate, expressed as a floating-point number.
   */
   public query func getIcpExchangeRate() : async Float{
     return Float.fromInt(icpExchangeRate / 10_000_000_000_000_000);
   };
 
   /**
-  * Retrieve the total amount of ICP tokens collected in the treasury.
+  * Retrieve the total amount of ICP tokens collected in the network.
   *
   * This method retrieves and returns the total amount of ICP tokens collected in the treasury, expressed as a floating-point number.
   */
-  public query func icpTreasuryTotalCollected() : async Float{
+  public query func icpTotalCollected() : async Float{
     return Float.fromInt(icpTreasury / 100_000_000);
   };
 
@@ -2145,7 +2194,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
    *
    * @return The minimum ETH tokens required for a drop, expressed as a floating-point number.
    */
-  public query func ethMinimumTokensRequired() : async Float{
+  public query func ethMinimumTokensRequiredForDrop() : async Float{
     return Float.fromInt(ethMinimum / 100_000_000);
   };
 
@@ -2163,7 +2212,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
    *
    * @return The total amount of ETH tokens collected in the treasury, expressed as a floating-point number.
    */
-  public query func ethTreasuryTotalCollected() : async Float{
+  public query func ethTotalCollected() : async Float{
     return Float.fromInt(ethTreasury / 100_000_000);
   };
 
@@ -2172,7 +2221,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
    *
    * This method retrieves and returns the minimum Bitcoin tokens required for a drop, expressed as a floating-point number.
    */
-  public query func btcMinimumTokensRequired() : async Float{
+  public query func btcMinimumTokensRequiredForDrop() : async Float{
     return Float.fromInt(btcMinimum / 100_000_000);
   };
   /**
@@ -2188,7 +2237,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
    *
    * @return The total amount of Bitcoin tokens collected in the treasury, expressed as a floating-point number.
    */
-  public query func btcTreasuryTotalCollected() : async Float{
+  public query func btcTotalCollected() : async Float{
     return Float.fromInt(btcTreasury / 100_000_000);
   };
 
@@ -2202,7 +2251,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   /**
-  * Retrieve the current reward cycle:
+  * Retrieve the current reward cycle.
   *
   * @return The current reward cycle as a natural number.
   *
@@ -2213,7 +2262,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   };
 
   /**
-   * Retrieve the total number of ephemeral mints performed:
+   * Retrieve the total number of ephemeral mints performed.
    *
    * This method retrieves and returns the total number of ephemeral mints performed, providing insight into the overall minting activity.
    */
@@ -2251,7 +2300,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
   /**
   * Retrieves the coin allocation by mark for a given account.
   *
-  * This method retrieves and returns the minted balance for a specified mark, expressed as a floating-point number.
+  * This method retrieves and returns the minted balance for a specified mark, expressed as a float.
   *
   * @param {ICRC1.Account} args The account to retrieve the minted balance for.
   * @param {Text} mark The mark for which to retrieve the minted balance.
@@ -2289,7 +2338,7 @@ shared ({ caller = _owner }) actor class Token  (args: ?{
 /**
  * Retrieves the total ephemeral minted balance.
  *
- * This method retrieves and returns the total ephemeral minted balance, expressed as a floating-point number.
+ * This method retrieves and returns the total ephemeral minted balance, expressed as a float.
  */
   public shared func totalEphemeralMintedBalance() : async Float{
     return Float.fromInt(ephemeralMintedBalance)

@@ -11,6 +11,7 @@ module {
     amount : Nat;
   };
   public type DropAccount = {
+    moniker: Text;
     owner: Principal;
     subaccount : ?[Nat8]
   };
